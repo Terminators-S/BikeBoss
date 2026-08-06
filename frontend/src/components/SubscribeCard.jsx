@@ -89,7 +89,11 @@ export default function SubscribeCard({ device, telegramId }) {
           <p>{t.scanWith}</p>
           {qrDataUrl
             ? <img className="qr-img" src={qrDataUrl} alt="KHQR payment code" />
-            : <pre>{invoice.khqr_payload}</pre>}
+            : (
+              <a className="btn" href={invoice.payway_link} target="_blank" rel="noreferrer">
+                {t.payViaLink ?? 'Pay via ABA PayWay link'}
+              </a>
+            )}
           <p className="label">Ref: {invoice.invoice_ref}</p>
           <p className="label">{t.expires}: {new Date(invoice.expires_at).toLocaleTimeString()}</p>
           <p className="hint">{t.waitingPayment ?? 'Waiting for payment… this updates automatically.'}</p>

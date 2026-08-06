@@ -1,3 +1,5 @@
 pyrogram>=2.0.106
 tgcrypto>=1.2.5
 requests>=2.31.0
+# Optional — only for the QR scraper fallback endpoint:
+# playwright>=1.40.0   (then run: playwright install chromium)

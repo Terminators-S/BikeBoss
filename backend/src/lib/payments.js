@@ -65,7 +65,8 @@ export async function createInvoice(telegramId, env) {
   const invoiceRef = `BB-INV-${Date.now()}`;
   const expiresAt = new Date(Date.now() + INVOICE_TTL_MINUTES * 60000).toISOString();
 
-  // Build the real KHQR EMV payload — scannable by ABA Mobile / Bakong
+  // Build the real KHQR EMV payload — scannable by ABA Mobile / Bakong.
+  // EMV is primary; Mini App falls back to the PayWay link if rendering fails.
   const qrPayload = buildKHQRPayload({
     merchantAccountId: env.ABA_MERCHANT_ACCOUNT_ID || 'bikeboss@abapay',
     merchantName: env.ABA_MERCHANT_NAME || 'BikeBoss',
@@ -83,6 +84,7 @@ export async function createInvoice(telegramId, env) {
     invoice_ref: invoiceRef,
     amount_usd: amount,
     khqr_payload: qrPayload,
+    payway_link: env.PAYWAY_STATIC_LINK || null,  // fallback path
     expires_at: expiresAt,
   };
 }
