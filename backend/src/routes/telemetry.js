@@ -6,6 +6,7 @@ import { checkGeofence, checkVanLift, checkHeartbeatTimeout } from '../lib/geofe
 import { reconstructTrip } from '../lib/trips.js';
 import { getUserChatIdForDevice, logEvent, pullPendingCommands } from '../lib/db.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
+import { getBotStrings, getLanguageForDevice } from '../lib/i18n.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -92,20 +93,17 @@ export async function handleCrash(body, env) {
   const chatId = await getUserChatIdForDevice(device_id, env);
   if (chatId) {
     const locationLink = (gps?.lat && gps?.lon)
-      ? `\n📍 <a href="https://maps.google.com/?q=${gps.lat},${gps.lon}">Crash Location on Map</a>`
-      : '\n⚠️ GPS location unavailable';
+      ? `📍 <a href="https://maps.google.com/?q=${gps.lat},${gps.lon}">Crash Location on Map</a>`
+      : '⚠️ GPS location unavailable';
 
-    await sendTelegramMessage(chatId, [
-      '🆘 <b>CRASH DETECTED!</b>',
-      '',
-      `Device: <code>${device_id}</code>`,
-      `Impact: ${imu?.atotal?.toFixed(1) || '?'} m/s²`,
-      `Rotation: ${imu?.gtotal?.toFixed(2) || '?'} rad/s`,
-      `Posture: Az=${imu?.az?.toFixed(1) || '?'} m/s²`,
+    const s = getBotStrings(await getLanguageForDevice(device_id, env));
+    await sendTelegramMessage(chatId, s.crash({
+      deviceId: device_id,
+      impact: imu?.atotal?.toFixed(1),
+      rotation: imu?.gtotal?.toFixed(2),
+      az: imu?.az?.toFixed(1),
       locationLink,
-      '',
-      '⚠️ <b>Emergency services may need to be contacted.</b>',
-    ].join('\n'), env, { deviceId: device_id });
+    }), env, { deviceId: device_id });
   }
 
   return json({ status: 'ok', alert: 'dispatched' });
@@ -121,16 +119,11 @@ export async function handlePowerCutAlert(body, env) {
 
   const chatId = await getUserChatIdForDevice(device_id, env);
   if (chatId) {
-    await sendTelegramMessage(chatId, [
-      '🔌 <b>POWER CUT ALERT!</b>',
-      '',
-      `Device: <code>${device_id}</code>`,
-      `Battery: ${vbat?.toFixed(1) || '?'}V`,
-      '',
-      'The main motorcycle battery has been disconnected.',
-      'The device is now running on its internal backup battery.',
-      '⚠️ This may indicate tampering or theft.',
-    ].join('\n'), env, { deviceId: device_id });
+    const s = getBotStrings(await getLanguageForDevice(device_id, env));
+    await sendTelegramMessage(chatId, s.powerCut({
+      deviceId: device_id,
+      vbat: vbat?.toFixed(1),
+    }), env, { deviceId: device_id });
   }
 
   return json({ status: 'ok' });

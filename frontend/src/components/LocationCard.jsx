@@ -1,9 +1,12 @@
+import { useLanguage } from './LanguageProvider.jsx';
+
 export default function LocationCard({ latest, geofences }) {
+  const { t } = useLanguage();
   const hasFix = latest?.gps_fix && latest?.gps_lat != null;
 
   return (
     <section className="card">
-      <h2>Location</h2>
+      <h2>{t.location}</h2>
       {hasFix ? (
         <>
           <div className="coords">
@@ -16,16 +19,16 @@ export default function LocationCard({ latest, geofences }) {
             target="_blank"
             rel="noreferrer"
           >
-            🗺️ Open in Maps
+            {t.openInMaps}
           </a>
         </>
       ) : (
-        <p className="hint">No GPS fix right now.</p>
+        <p className="hint">{t.noGpsFix}</p>
       )}
 
       {geofences?.length > 0 && (
         <div className="geofences">
-          <h3>Active geofences</h3>
+          <h3>{t.activeGeofences}</h3>
           {geofences.map((z) => (
             <div key={z.id} className="geofence-row">
               <span>{z.label}</span>

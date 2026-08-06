@@ -12,7 +12,7 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "bikeboss-db"
-database_id = "PLACEHOLDER_D1_DATABASE_ID"
+database_id = "39b92178-4c87-41e4-83ce-0044091bac15"
 
 # ---------------------------------------------------------------------------
 # Environment Variables
@@ -35,11 +35,11 @@ HEARTBEAT_TIMEOUT_MS = 600000
 crons = ["*/5 * * * *", "0 9 * * *"]
 
 # ---------------------------------------------------------------------------
-# Routes (optional — custom domain)
+# Routes — custom domain on Cloudflare
 # ---------------------------------------------------------------------------
-# [[routes]]
-# pattern = "api.bikeboss.io/*"
-# zone_name = "bikeboss.io"
+[[routes]]
+pattern = "api.creative-studio.blog/*"
+zone_name = "creative-studio.blog"
 
 # ---------------------------------------------------------------------------
 # Observability

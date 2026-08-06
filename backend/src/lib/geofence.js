@@ -6,6 +6,7 @@ import { haversineDistance } from './geo.js';
 import { sendTelegramMessage } from './telegram.js';
 import { logEvent, getUserChatIdForDevice, recentEventExists } from './db.js';
 import { MOTION_THRESHOLD } from './imu.js';
+import { getBotStrings, getLanguageForDevice } from './i18n.js';
 
 export const GEOFENCE_DEFAULT_RADIUS_M = 100;
 export const GEOFENCE_MIN_SPEED_KMH = 0.5;
@@ -41,15 +42,15 @@ export async function checkGeofence(deviceId, lat, lon, speed, env) {
 
       const chatId = await getUserChatIdForDevice(deviceId, env);
       if (chatId) {
-        await sendTelegramMessage(chatId, [
-          '🚨 <b>GEOFENCE BREACH!</b>',
-          '',
-          `Device: <code>${deviceId}</code>`,
-          `Zone: ${zone.label}`,
-          `Distance: ${distance.toFixed(0)}m (limit: ${zone.radius_m}m)`,
-          `Speed: ${speed.toFixed(1)} km/h`,
-          `📍 <a href="https://maps.google.com/?q=${lat},${lon}">View on Map</a>`,
-        ].join('\n'), env, { deviceId });
+        const s = getBotStrings(await getLanguageForDevice(deviceId, env));
+        await sendTelegramMessage(chatId, s.geofenceBreach({
+          deviceId,
+          zone: zone.label,
+          distance: distance.toFixed(0),
+          radius: zone.radius_m,
+          speed: speed.toFixed(1),
+          locationLink: `📍 <a href="https://maps.google.com/?q=${lat},${lon}">View on Map</a>`,
+        }), env, { deviceId });
       }
 
       return { breached: true, zone: zone.label, distance };
@@ -73,14 +74,8 @@ export async function checkVanLift(deviceId, atotal, gpsFix, env) {
 
   const chatId = await getUserChatIdForDevice(deviceId, env);
   if (chatId) {
-    await sendTelegramMessage(chatId, [
-      '🚨 <b>CRITICAL: Motion Detected Without GPS!</b>',
-      '',
-      `Device: <code>${deviceId}</code>`,
-      'Your motorcycle is moving but GPS is blocked.',
-      'This may indicate the bike has been loaded into a vehicle.',
-      '⚠️ <b>Possible van-lift theft in progress!</b>',
-    ].join('\n'), env, { deviceId });
+    const s = getBotStrings(await getLanguageForDevice(deviceId, env));
+    await sendTelegramMessage(chatId, s.vanLift({ deviceId }), env, { deviceId });
   }
 
   return true;
@@ -111,13 +106,10 @@ export async function checkHeartbeatTimeout(deviceId, env) {
 
   const chatId = await getUserChatIdForDevice(deviceId, env);
   if (chatId) {
-    await sendTelegramMessage(chatId, [
-      '⚠️ <b>Connection Lost</b>',
-      '',
-      `Device: <code>${deviceId}</code>`,
-      `Last seen: ${latest.received_at}`,
-      'The device may be in an underground garage or the battery may be disconnected.',
-      'Check your bike if this is unexpected.',
-    ].join('\n'), env, { deviceId });
+    const s = getBotStrings(await getLanguageForDevice(deviceId, env));
+    await sendTelegramMessage(chatId, s.heartbeatTimeout({
+      deviceId,
+      lastSeen: latest.received_at,
+    }), env, { deviceId });
   }
 }

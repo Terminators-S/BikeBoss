@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { api } from '../api.js';
+import { useLanguage } from './LanguageProvider.jsx';
 
 export default function SubscribeCard({ device, telegramId }) {
+  const { t } = useLanguage();
   const [invoice, setInvoice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const renew = async () => {
     if (!telegramId) {
-      setError('Open inside Telegram to renew.');
+      setError(t.openInTelegramToRenew);
       return;
     }
     setBusy(true);
@@ -26,27 +28,27 @@ export default function SubscribeCard({ device, telegramId }) {
 
   return (
     <section className="card">
-      <h2>Subscription</h2>
+      <h2>{t.subscription}</h2>
       <div className="sub-row">
-        <span className="label">Expires</span>
+        <span className="label">{t.expires}</span>
         <span>{device?.subscription_expiry || 'N/A'}</span>
       </div>
       <div className="sub-row">
-        <span className="label">Renewal</span>
-        <span>$15.00 / year</span>
+        <span className="label">{t.renewal}</span>
+        <span>$15.00 {t.perYear}</span>
       </div>
 
       {!invoice && (
         <button className="btn primary" onClick={renew} disabled={busy}>
-          {busy ? 'Creating invoice…' : '💳 Extend ($15/Year)'}
+          {busy ? t.creatingInvoice : t.extendBtn}
         </button>
       )}
 
       {invoice && (
         <div className="invoice">
-          <p>Scan with ABA Mobile / Bakong:</p>
+          <p>{t.scanWith}</p>
           <pre>{invoice.qr_code_data}</pre>
-          <p className="label">Ref: {invoice.invoice_ref} · expires {invoice.expires_at}</p>
+          <p className="label">Ref: {invoice.invoice_ref} · {t.expires} {invoice.expires_at}</p>
         </div>
       )}
 

@@ -1,10 +1,14 @@
+import { useLanguage } from './LanguageProvider.jsx';
+
 const SEVERITY_ICON = { info: 'ℹ️', warning: '⚠️', critical: '🚨' };
 
 export default function EventsList({ events }) {
+  const { t } = useLanguage();
+
   return (
     <section className="card">
-      <h2>Recent Events</h2>
-      {!events?.length && <p className="hint">No events yet.</p>}
+      <h2>{t.recentEvents}</h2>
+      {!events?.length && <p className="hint">{t.noEvents}</p>}
       <ul className="event-list">
         {events?.map((e) => (
           <li key={e.id} className={`event ${e.severity}`}>

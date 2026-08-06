@@ -24,6 +24,7 @@ const HELP_TEXT = [
   '/geofence — Set geofence anchor',
   '/trips — Recent trip history',
   '/subscribe — Manage subscription',
+  '/lang — Language / ភាសា (EN / ខ្មែរ)',
   '/help — Show this help',
 ].join('\n');
 
@@ -77,6 +78,8 @@ export async function handleTelegramWebhook(body, env) {
     reply = await cmdTrips(telegramId, env);
   } else if (text.startsWith('/subscribe')) {
     return cmdSubscribe(chatId, telegramId, env);
+  } else if (text.startsWith('/lang')) {
+    return cmdLanguage(chatId, telegramId, text, env);
   } else if (text.startsWith('/help')) {
     reply = HELP_TEXT;
   } else {
@@ -281,9 +284,50 @@ async function cmdSubscribe(chatId, telegramId, env) {
   return ok();
 }
 
+async function cmdLanguage(chatId, telegramId, text, env) {
+  const parts = text.split(/\s+/);
+  const choice = parts[1]?.toLowerCase();
+
+  if (choice === 'en' || choice === 'km') {
+    await env.DB.prepare(
+      `UPDATE users SET language = ?, updated_at = datetime('now') WHERE telegram_id = ?`
+    ).bind(choice, telegramId).run();
+
+    const msg = choice === 'km'
+      ? '✅ ភាសាត្រូវបានកំណត់ជាភាសាខ្មែរ។'
+      : '✅ Language set to English.';
+    await sendTelegramMessage(chatId, msg, env);
+    return ok();
+  }
+
+  // No arg → show picker
+  await sendTelegramMessage(chatId, 'ជ្រើសរើសភាសា / Choose your language:', env, {
+    replyMarkup: {
+      inline_keyboard: [[
+        { text: '🇬🇧 English', callback_data: 'lang_en' },
+        { text: '🇰🇭 ខ្មែរ', callback_data: 'lang_km' },
+      ]],
+    },
+  });
+  return ok();
+}
+
 async function handleCallback(cb, env) {
   const chatId = cb.message.chat.id;
   const telegramId = String(cb.from.id);
+
+  if (cb.data === 'lang_en' || cb.data === 'lang_km') {
+    const choice = cb.data === 'lang_km' ? 'km' : 'en';
+    await env.DB.prepare(
+      `UPDATE users SET language = ?, updated_at = datetime('now') WHERE telegram_id = ?`
+    ).bind(choice, telegramId).run();
+
+    const msg = choice === 'km'
+      ? '✅ ភាសាត្រូវបានកំណត់ជាភាសាខ្មែរ។ ការជូនដំណឹងទាំងអស់នឹងជាភាសាខ្មែរ។'
+      : '✅ Language set to English. All alerts will be in English.';
+    await sendTelegramMessage(chatId, msg, env);
+    return ok();
+  }
 
   if (cb.data === 'create_invoice') {
     const invoice = await createInvoice(telegramId, env);

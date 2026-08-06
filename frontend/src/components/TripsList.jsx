@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useLanguage } from './LanguageProvider.jsx';
 
 export default function TripsList({ deviceId }) {
+  const { t } = useLanguage();
   const [trips, setTrips] = useState(null);
 
   useEffect(() => {
@@ -10,20 +12,20 @@ export default function TripsList({ deviceId }) {
 
   return (
     <section className="card">
-      <h2>Recent Trips</h2>
-      {!trips && <p className="hint">Loading…</p>}
-      {trips?.length === 0 && <p className="hint">No trips recorded yet.</p>}
+      <h2>{t.recentTrips}</h2>
+      {!trips && <p className="hint">{t.loading}</p>}
+      {trips?.length === 0 && <p className="hint">{t.noTrips}</p>}
       <ul className="trip-list">
-        {trips?.map((t) => (
-          <li key={t.id} className="trip">
+        {trips?.map((trip) => (
+          <li key={trip.id} className="trip">
             <div className="trip-head">
-              <span>{(t.start_time || '').slice(0, 16)}</span>
-              <span>{(t.distance_km ?? 0).toFixed(1)} km</span>
+              <span>{(trip.start_time || '').slice(0, 16)}</span>
+              <span>{(trip.distance_km ?? 0).toFixed(1)} km</span>
             </div>
             <div className="trip-stats">
-              <span>Max {(t.max_speed_kmh ?? 0).toFixed(0)} km/h</span>
-              <span>Safety {t.safety_score ?? '—'}/100</span>
-              <span>Eco {t.eco_score ?? '—'}/100</span>
+              <span>{t.maxSpeed} {(trip.max_speed_kmh ?? 0).toFixed(0)} km/h</span>
+              <span>{t.safety} {trip.safety_score ?? '—'}/100</span>
+              <span>{t.eco} {trip.eco_score ?? '—'}/100</span>
             </div>
           </li>
         ))}

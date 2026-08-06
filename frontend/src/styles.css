@@ -36,7 +36,34 @@ body {
   padding: 4px 4px 0;
 }
 .header h1 { font-size: 1.25rem; }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .user { color: var(--hint); font-size: 0.85rem; }
+
+.lang-picker {
+  display: flex;
+  gap: 4px;
+  background: var(--card);
+  border-radius: 8px;
+  padding: 2px;
+}
+.lang-btn {
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lang-btn.active {
+  background: var(--btn);
+  color: var(--btn-text);
+}
 
 .banner {
   background: var(--card);

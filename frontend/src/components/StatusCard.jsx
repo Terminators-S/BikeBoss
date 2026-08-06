@@ -1,11 +1,14 @@
+import { useLanguage } from './LanguageProvider.jsx';
+
 export default function StatusCard({ device, latest, onRefresh }) {
-  const armLabels = ['Disarmed', 'Armed', 'Pending Unlock'];
+  const { t } = useLanguage();
+  const armLabels = [t.disarmed, t.armed, t.pendingUnlock];
   const armClass = ['disarmed', 'armed', 'pending'][latest?.arm_state ?? 0];
 
   return (
     <section className="card">
       <div className="card-title">
-        <h2>{device?.vehicle_model || 'My Bike'}</h2>
+        <h2>{device?.vehicle_model || t.myBike}</h2>
         <button className="btn small" onClick={onRefresh}>↻</button>
       </div>
       <div className={`arm-state ${armClass}`}>
@@ -13,26 +16,23 @@ export default function StatusCard({ device, latest, onRefresh }) {
       </div>
       <div className="grid">
         <div className="stat">
-          <span className="label">Battery</span>
+          <span className="label">{t.battery}</span>
           <span className="value">{latest?.vbat != null ? `${latest.vbat.toFixed(1)}V` : '—'}</span>
         </div>
         <div className="stat">
-          <span className="label">Speed</span>
+          <span className="label">{t.speed}</span>
           <span className="value">{latest?.gps_speed != null ? `${latest.gps_speed.toFixed(0)} km/h` : '—'}</span>
         </div>
         <div className="stat">
-          <span className="label">GPS</span>
-          <span className="value">{latest?.gps_fix ? 'Fixed' : 'No fix'}</span>
+          <span className="label">{t.gps}</span>
+          <span className="value">{latest?.gps_fix ? t.gpsFixed : t.gpsNoFix}</span>
         </div>
         <div className="stat">
-          <span className="label">Last seen</span>
-          <span className="value small">{latest?.received_at || 'never'}</span>
+          <span className="label">{t.lastSeen}</span>
+          <span className="value small">{latest?.received_at || t.never}</span>
         </div>
       </div>
-      <p className="hint">
-        Remote arm/disarm lands on the next device heartbeat — use the bot commands
-        /arm and /disarm to queue them.
-      </p>
+      <p className="hint">{t.armHint}</p>
     </section>
   );
 }
