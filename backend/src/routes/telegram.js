@@ -32,7 +32,24 @@ const STR = {
       '/lang — Change language / ផ្លាស់ប្តូរភាសា',
       '/help — Show this help',
     ].join('\n'),
-    welcomeBack: (name) => `🏍️ Welcome back, ${name}! Type /help for commands.`,
+    welcome: (u) => [
+      `🏍️ <b>Welcome to BikeBoss, ${u.name}!</b>`,
+      '',
+      'Your motorcycle security & safety companion — anti-theft, crash detection, and keyless access, all from Telegram.',
+      '',
+      '👤 <b>Your BikeBoss account</b>',
+      `• Name: <b>${u.name}</b>`,
+      `• Username: <b>${u.username}</b>`,
+      `• Telegram ID: <code>${u.telegramId}</code>`,
+      '',
+      '🔑 Your Telegram ID is your <b>unique account identity</b> — your device links to it, and all alerts & payments are tied to it.',
+      '',
+      '👉 Next: link your device with /register <code>BB-xxxxxxxx</code>',
+      '👉 Open the app: tap <b>🏍️ BikeBoss</b> in the menu button',
+      '',
+      'Type /help anytime to see all commands.',
+    ].join('\n'),
+    welcomeBack: (name) => `🏍️ Welcome back, <b>${name}</b>! Type /help for commands, or tap the 🏍️ menu button to open the app.`,
     noDevice: '⚠️ No device linked. Use /register <code>BB-xxxxxxxx</code>.',
     registerUsage: '⚠️ Usage: /register <code>BB-xxxxxxxx</code>\nThe device ID is printed on your BikeBoss unit label.',
     registerNew: (id) => `✅ <b>Device registered & linked!</b>\n\nDevice: <code>${id}</code>\nThis unit was auto-provisioned. Try /status once it comes online.`,
@@ -70,7 +87,24 @@ const STR = {
       '/lang — ផ្លាស់ប្តូរភាសា / Change language',
       '/help — មើលជំនួយ',
     ].join('\n'),
-    welcomeBack: (name) => `🏍️ សូមស្វាគមន៍, ${name}! វាយ /help សម្រាប់ពាក្យបញ្ជា។`,
+    welcome: (u) => [
+      `🏍️ <b>សូមស្វាគមន៍មកកាន់ BikeBoss, ${u.name}!</b>`,
+      '',
+      'ដៃគូការពារ និងសុវត្ថិភាពម៉ូតូរបស់អ្នក — ប្រឆាំងការលួច រកឃើញគ្រោះថ្នាក់ និងបើកដោយគ្មានសោ ទាំងអស់ក្នុង Telegram។',
+      '',
+      '👤 <b>គណនី BikeBoss របស់អ្នក</b>',
+      `• ឈ្មោះ: <b>${u.name}</b>`,
+      `• ឈ្មោះអ្នកប្រើ: <b>${u.username}</b>`,
+      `• លេខសម្គាល់ Telegram: <code>${u.telegramId}</code>`,
+      '',
+      '🔑 លេខសម្គាល់ Telegram របស់អ្នកគឺជា <b>អត្តសញ្ញាណគណនីផ្តាច់មុខ</b> — ឧបករណ៍របស់អ្នកភ្ជាប់ទៅវា ហើយការជូនដំណឹង និងការទូទាត់ទាំងអស់ចាត់ទុកតាមវា។',
+      '',
+      '👉 បន្ទាប់: ភ្ជាប់ឧបករណ៍របស់អ្នកដោយ /register <code>BB-xxxxxxxx</code>',
+      '👉 បើកកម្មវិធី: ចុច <b>🏍️ BikeBoss</b> នៅប៊ូតុងម៉ឺនុយ',
+      '',
+      'វាយ /help គ្រប់ពេលដើម្បីមើលពាក្យបញ្ជាទាំងអស់។',
+    ].join('\n'),
+    welcomeBack: (name) => `🏍️ សូមស្វាគមន៍, <b>${name}</b>! វាយ /help សម្រាប់ពាក្យបញ្ជា ឬចុចប៊ូតុង 🏍️ ដើម្បីបើកកម្មវិធី។`,
     noDevice: '⚠️ មិនទាន់ភ្ជាប់ឧបករណ៍។ ប្រើ /register <code>BB-xxxxxxxx</code>។',
     registerUsage: '⚠️ ប្រើ: /register <code>BB-xxxxxxxx</code>\nលេខកូដឧបករណ៍ស្ថិតនៅលើស្លាក BikeBoss របស់អ្នក។',
     registerNew: (id) => `✅ <b>ឧបករណ៍ត្រូវបានចុះឈ្មោះ & ភ្ជាប់!</b>\n\nឧបករណ៍: <code>${id}</code>\nសាក /status នៅពេលឧបករណ៍ដំណើរការ។`,
@@ -105,11 +139,6 @@ const LANG_KEYBOARD = {
 
 const s = (lang) => STR[lang === 'km' ? 'km' : 'en'];
 
-async function getLang(telegramId, env) {
-  const user = await getUserByTelegramId(telegramId, env);
-  return user?.language === 'km' ? 'km' : 'en';
-}
-
 export async function handleTelegramWebhook(body, env) {
   const msg = body.message;
   const cb = body.callback_query;
@@ -131,12 +160,12 @@ export async function handleTelegramWebhook(body, env) {
     displayName: msg.from.first_name ?? 'Rider',
   }, env);
 
-  const lang = await getLang(telegramId, env);
+  const user = await getUserByTelegramId(telegramId, env);
+  const lang = user?.language === 'km' ? 'km' : 'en';
   const t = s(lang);
 
-  // --- /start → language picker FIRST if never chosen ---
+  // --- /start ---
   if (text.startsWith('/start')) {
-    const user = await getUserByTelegramId(telegramId, env);
     if (!user?.language) {
       // First-ever interaction: force language choice before anything else
       await sendTelegramMessage(chatId, [
@@ -147,13 +176,12 @@ export async function handleTelegramWebhook(body, env) {
       ].join('\n'), env, { replyMarkup: LANG_KEYBOARD });
       return ok();
     }
-    // Returning user → localized welcome
-    await sendTelegramMessage(chatId, t.welcomeBack(msg.from.first_name ?? 'Rider'), env);
+    // Returning user → localized welcome-back
+    await sendTelegramMessage(chatId, t.welcomeBack(user.display_name ?? 'Rider'), env);
     return ok();
   }
 
   // --- Gate: if language never chosen, ask again and stop ---
-  const user = await getUserByTelegramId(telegramId, env);
   if (!user?.language && !text.startsWith('/lang')) {
     await sendTelegramMessage(chatId, LANG_PROMPT, env, { replyMarkup: LANG_KEYBOARD });
     return ok();
@@ -388,10 +416,18 @@ async function handleCallback(cb, env) {
       `UPDATE users SET language = ?, updated_at = datetime('now') WHERE telegram_id = ?`
     ).bind(choice, telegramId).run();
 
-    await sendTelegramMessage(chatId, s(choice).langSet, env);
+    const t = s(choice);
+    await sendTelegramMessage(chatId, t.langSet, env);
 
-    // Follow with welcome + help in the newly chosen language
-    await sendTelegramMessage(chatId, s(choice).help, env);
+    // Full welcome showing the user's identity — the core of their account
+    const user = await getUserByTelegramId(telegramId, env);
+    const name = [cb.from.first_name, cb.from.last_name].filter(Boolean).join(' ') || user?.display_name || 'Rider';
+    const username = cb.from.username ? `@${cb.from.username}` : '—';
+    await sendTelegramMessage(chatId, t.welcome({
+      name,
+      username,
+      telegramId,
+    }), env);
     return ok();
   }
 

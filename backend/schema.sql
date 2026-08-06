@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     telegram_handle TEXT,
     phone_number    TEXT,
     display_name    TEXT NOT NULL,
-    language        TEXT NOT NULL DEFAULT 'en',
+    language        TEXT,                          -- NULL until user picks on /start (en | km)
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
