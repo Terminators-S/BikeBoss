@@ -19,7 +19,7 @@
 
 import { handleTelemetry, handleCrash, handlePowerCutAlert } from './routes/telemetry.js';
 import { handleTelegramWebhook } from './routes/telegram.js';
-import { handleGetDeviceStatus, handleGetTrips, handleSetGeofence } from './routes/api.js';
+import { handleGetDeviceStatus, handleGetTrips, handleSetGeofence, handleGetLanguage, handleSetLanguage } from './routes/api.js';
 import { handlePayWayWebhook, createInvoice } from './lib/payments.js';
 import { checkHeartbeatTimeout } from './lib/geofence.js';
 import { sendTelegramMessage } from './lib/telegram.js';
@@ -83,6 +83,13 @@ async function routeRequest(request, env) {
   }
   if (method === 'POST' && pathname === '/api/v1/geofence/set') {
     return handleSetGeofence(body, env);
+  }
+  if (method === 'GET' && pathname.startsWith('/api/v1/user/') && pathname.endsWith('/language')) {
+    const telegramId = pathname.split('/api/v1/user/')[1].replace('/language', '');
+    return handleGetLanguage(telegramId, env);
+  }
+  if (method === 'POST' && pathname === '/api/v1/user/language') {
+    return handleSetLanguage(body, env);
   }
   if (method === 'POST' && pathname === '/api/v1/invoice/create') {
     const result = await createInvoice(body.telegram_id, env);

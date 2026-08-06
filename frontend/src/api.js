@@ -28,6 +28,8 @@ export const api = {
   trips: (deviceId) => get(`/api/v1/trips/${deviceId}`),
   setGeofence: (payload) => post('/api/v1/geofence/set', payload),
   createInvoice: (telegramId) => post('/api/v1/invoice/create', { telegram_id: telegramId }),
+  getLanguage: (telegramId) => get(`/api/v1/user/${telegramId}/language`),
+  setLanguage: (telegramId, language) => post('/api/v1/user/language', { telegram_id: telegramId, language }),
 };
 
 /**

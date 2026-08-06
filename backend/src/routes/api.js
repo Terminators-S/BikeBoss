@@ -61,3 +61,32 @@ export async function handleSetGeofence(body, env) {
 
   return json({ status: 'ok' });
 }
+
+/**
+ * GET /api/v1/user/:telegramId/language → { language: 'en' | 'km' | null }
+ * Used by the Mini App to sync with the bot's language preference.
+ */
+export async function handleGetLanguage(telegramId, env) {
+  const user = await env.DB.prepare(
+    'SELECT language FROM users WHERE telegram_id = ?'
+  ).bind(String(telegramId)).first();
+
+  return json({ language: user?.language ?? null });
+}
+
+/**
+ * POST /api/v1/user/language { telegram_id, language } — set preference.
+ * Shared with the bot: changing in the app changes alerts too, and vice versa.
+ */
+export async function handleSetLanguage(body, env) {
+  const { telegram_id, language } = body;
+  if (!telegram_id || !['en', 'km'].includes(language)) {
+    return json({ error: 'telegram_id and language (en|km) required' }, 400);
+  }
+
+  await env.DB.prepare(
+    `UPDATE users SET language = ?, updated_at = datetime('now') WHERE telegram_id = ?`
+  ).bind(language, String(telegram_id)).run();
+
+  return json({ status: 'ok', language });
+}

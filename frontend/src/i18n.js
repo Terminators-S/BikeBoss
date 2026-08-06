@@ -108,23 +108,6 @@ export const translations = {
 
 export const SUPPORTED_LANGUAGES = ['en', 'km'];
 
-/**
- * Resolve the initial language.
- * 1. localStorage (user picked before)
- * 2. Telegram UI language (km → 'km', else 'en')
- * 3. 'en'
- */
-export function resolveInitialLanguage() {
-  try {
-    const saved = localStorage.getItem('bikeboss_lang');
-    if (saved && SUPPORTED_LANGUAGES.includes(saved)) return saved;
-  } catch { /* ignore */ }
-
-  const tgLang = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
-  if (tgLang && tgLang.startsWith('km')) return 'km';
-  return 'en';
-}
-
 export function persistLanguage(lang) {
   try {
     localStorage.setItem('bikeboss_lang', lang);
