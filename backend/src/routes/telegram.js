@@ -139,6 +139,11 @@ const LANG_KEYBOARD = {
 
 const s = (lang) => STR[lang === 'km' ? 'km' : 'en'];
 
+async function getLangSafe(telegramId, env) {
+  const user = await getUserByTelegramId(telegramId, env);
+  return user?.language === 'km' ? 'km' : 'en';
+}
+
 export async function handleTelegramWebhook(body, env) {
   const msg = body.message;
   const cb = body.callback_query;
@@ -433,23 +438,34 @@ async function handleCallback(cb, env) {
 
   if (cb.data === 'create_invoice') {
     const invoice = await createInvoice(telegramId, env);
+    const lang = await getLangSafe(telegramId, env);
     const text = invoice.error
       ? `⚠️ ${invoice.error}`
-      : [
-          '💳 <b>Payment Invoice</b>',
-          '',
-          `Amount: $${invoice.amount_usd.toFixed(2)} USD`,
-          `Ref: <code>${invoice.invoice_ref}</code>`,
-          '',
-          'Scan the KHQR code below with ABA Mobile or Bakong:',
-          '',
-          `<pre>${invoice.qr_code_data}</pre>`,
-          '',
-          `⏳ Expires: ${invoice.expires_at}`,
-          'Once paid, your subscription auto-extends by 365 days.',
-        ].join('\n');
+      : lang === 'km'
+        ? [
+            '💳 <b>វិក្កយបត្រទូទាត់</b>',
+            '',
+            `ចំនួន: <b>$${invoice.amount_usd.toFixed(2)}</b> USD`,
+            `លេខយោង: <code>${invoice.invoice_ref}</code>`,
+            '',
+            '👉 បើកកម្មវិធី BikeBoss (ប៊ូតុង 🏍️ ក្នុងម៉ឺនុយ) ដើម្បីមើល QR ហើយស្កេនជាមួយ ABA Mobile / Bakong។',
+            '',
+            `⏳ ផុតកំណត់ក្នុង 15 នាទី។ ការទូទាត់ត្រូវបានបញ្ជាក់ដោយស្វ័យប្រវត្តិ។`,
+          ].join('\n')
+        : [
+            '💳 <b>Payment Invoice</b>',
+            '',
+            `Amount: <b>$${invoice.amount_usd.toFixed(2)}</b> USD`,
+            `Ref: <code>${invoice.invoice_ref}</code>`,
+            '',
+            '👉 Open the BikeBoss app (🏍️ menu button) to see the QR and scan with ABA Mobile / Bakong.',
+            '',
+            '⏳ Expires in 15 minutes. Payment confirms automatically.',
+          ].join('\n');
 
     await sendTelegramMessage(chatId, text, env);
+    return ok();
   }
+
   return ok();
 }

@@ -203,6 +203,31 @@ body {
   font-size: 0.75rem;
 }
 
+.invoice .amount-big {
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.qr-img {
+  display: block;
+  margin: 0 auto;
+  width: 240px;
+  height: 240px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+}
+
+.paid-banner {
+  background: rgba(52, 199, 89, 0.15);
+  color: var(--green);
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 10px;
+  text-align: center;
+}
+
 .hint { font-size: 0.8rem; color: var(--hint); }
 .hint.error { color: var(--red); }
 code { font-family: ui-monospace, monospace; }

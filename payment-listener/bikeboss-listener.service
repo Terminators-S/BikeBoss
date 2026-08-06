@@ -1,0 +1,15 @@
+[Unit]
+Description=BikeBoss ABA Payment Listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bikeboss/payment-listener
+ExecStart=/usr/bin/python3 listener.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

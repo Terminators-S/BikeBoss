@@ -20,7 +20,7 @@
 import { handleTelemetry, handleCrash, handlePowerCutAlert } from './routes/telemetry.js';
 import { handleTelegramWebhook } from './routes/telegram.js';
 import { handleGetDeviceStatus, handleGetTrips, handleSetGeofence, handleGetLanguage, handleSetLanguage } from './routes/api.js';
-import { handlePayWayWebhook, createInvoice } from './lib/payments.js';
+import { handlePayWayWebhook, createInvoice, handleInvoiceStatus } from './lib/payments.js';
 import { checkHeartbeatTimeout } from './lib/geofence.js';
 import { sendTelegramMessage } from './lib/telegram.js';
 
@@ -94,6 +94,10 @@ async function routeRequest(request, env) {
   if (method === 'POST' && pathname === '/api/v1/invoice/create') {
     const result = await createInvoice(body.telegram_id, env);
     return json(result, result.error ? 400 : 200);
+  }
+  if (method === 'GET' && pathname.startsWith('/api/v1/invoice/') && pathname.endsWith('/status')) {
+    const ref = pathname.split('/api/v1/invoice/')[1].replace('/status', '');
+    return handleInvoiceStatus(ref, env);
   }
 
   // --- Webhooks ---

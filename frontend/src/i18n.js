@@ -39,6 +39,9 @@ export const translations = {
     extendBtn: '💳 Extend ($15/Year)',
     creatingInvoice: 'Creating invoice…',
     scanWith: 'Scan with ABA Mobile / Bakong:',
+    waitingPayment: 'Waiting for payment… this updates automatically.',
+    paymentConfirmed: 'Payment confirmed! Subscription extended 365 days.',
+    invoiceExpired: 'Invoice expired. Create a new one.',
     openInTelegramToRenew: 'Open inside Telegram to renew.',
 
     // Events
@@ -89,6 +92,9 @@ export const translations = {
     extendBtn: '💳 បន្ត ($15/ឆ្នាំ)',
     creatingInvoice: 'កំពុងបង្កើតវិក្កយបត្រ…',
     scanWith: 'ស្កេនជាមួយ ABA Mobile / Bakong:',
+    waitingPayment: 'កំពុងរង់ចាំការទូទាត់… នឹងធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តិ។',
+    paymentConfirmed: 'ការទូទាត់បានជោគជ័យ! ការជាវបន្ត ៣៦៥ ថ្ងៃ។',
+    invoiceExpired: 'វិក្កយបត្រផុតកំណត់។ បង្កើតថ្មី។',
     openInTelegramToRenew: 'បើកក្នុង Telegram ដើម្បីបន្ត។',
 
     recentEvents: 'ព្រឹត្តិការណ៍ថ្មីៗ',
