@@ -1,0 +1,19 @@
+{
+  "name": "bikeboss-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BikeBoss Cloudflare Workers API — telemetry, geofence, Telegram bot, KHQR payments",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create bikeboss-db",
+    "db:schema": "wrangler d1 execute bikeboss-db --file=./schema.sql",
+    "db:schema:local": "wrangler d1 execute bikeboss-db --local --file=./schema.sql",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "simulate": "node scripts/simulate-device.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

@@ -1,0 +1,10 @@
+# Local development secrets — copy to .dev.vars and fill real values.
+# .dev.vars is gitignored; never commit real credentials.
+
+TELEGRAM_BOT_TOKEN=123456:placeholder
+ABA_PAYWAY_MERCHANT_ID=placeholder
+ABA_PAYWAY_API_KEY=placeholder
+
+# Optional overrides
+GEOFENCE_DEFAULT_RADIUS_M=100
+HEARTBEAT_TIMEOUT_MS=600000

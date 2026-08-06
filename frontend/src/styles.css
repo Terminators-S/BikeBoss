@@ -1,0 +1,181 @@
+:root {
+  color-scheme: light dark;
+  --bg: var(--tg-theme-bg-color, #0e1621);
+  --card: var(--tg-theme-secondary-bg-color, #17212b);
+  --text: var(--tg-theme-text-color, #e8eef4);
+  --hint: var(--tg-theme-hint-color, #7d8b99);
+  --link: var(--tg-theme-link-color, #5eb2f2);
+  --btn: var(--tg-theme-button-color, #2f9be8);
+  --btn-text: var(--tg-theme-button-text-color, #ffffff);
+  --green: #34c759;
+  --red: #ff3b30;
+  --yellow: #ffcc00;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 4px 0;
+}
+.header h1 { font-size: 1.25rem; }
+.user { color: var(--hint); font-size: 0.85rem; }
+
+.banner {
+  background: var(--card);
+  border-left: 3px solid var(--yellow);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--hint);
+}
+.banner.error { border-left-color: var(--red); color: var(--red); }
+
+.loading { text-align: center; color: var(--hint); padding: 24px; }
+
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card h2 { font-size: 1rem; }
+.card h3 { font-size: 0.85rem; color: var(--hint); }
+
+.card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.arm-state {
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: center;
+}
+.arm-state.disarmed { background: rgba(52, 199, 89, 0.15); color: var(--green); }
+.arm-state.armed { background: rgba(255, 59, 48, 0.15); color: var(--red); }
+.arm-state.pending { background: rgba(255, 204, 0, 0.15); color: var(--yellow); }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.label { font-size: 0.75rem; color: var(--hint); }
+.value { font-size: 1rem; font-weight: 600; }
+.value.small { font-size: 0.8rem; font-weight: 400; }
+
+.btn {
+  display: block;
+  text-align: center;
+  background: var(--btn);
+  color: var(--btn-text);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.6; cursor: default; }
+.btn.small { padding: 4px 10px; font-size: 0.85rem; width: auto; }
+.btn.primary { width: 100%; }
+
+.coords {
+  display: flex;
+  gap: 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9rem;
+  color: var(--hint);
+}
+
+.geofences { display: flex; flex-direction: column; gap: 6px; }
+.geofence-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.event-list, .trip-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.event {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.event.critical { background: rgba(255, 59, 48, 0.08); }
+.event.warning { background: rgba(255, 204, 0, 0.08); }
+.event-type { font-weight: 600; font-size: 0.9rem; }
+
+.trip {
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.trip-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.trip-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--hint);
+}
+
+.sub-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.invoice pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.75rem;
+}
+
+.hint { font-size: 0.8rem; color: var(--hint); }
+.hint.error { color: var(--red); }
+code { font-family: ui-monospace, monospace; }
