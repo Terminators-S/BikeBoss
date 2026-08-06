@@ -11,11 +11,21 @@ npm run dev          # http://localhost:3000 — proxies /api → wrangler dev (
 
 Outside Telegram it runs in **demo mode** using device `BB-00000001`.
 
-## Production wiring
+## Production
 
-1. Deploy: `npm run build` → host `dist/` (Cloudflare Pages or serve from the Worker).
-2. In @BotFather: `/newapp` (or edit app) → set the Mini App URL.
-3. Set `VITE_API_BASE` to the Worker origin at build time if not same-origin.
+- **URL:** https://bikeboss.creative-studio.blog (Cloudflare Pages project `bikeboss-app`)
+- **API:** https://api.creative-studio.blog
+- Bot menu button opens the Mini App URL above.
+
+Deploy updates:
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name bikeboss-app
+```
+
+Then in @BotFather, keep the menu button pointed at the custom domain (already set).
+
 
 ## Telegram integration
 
