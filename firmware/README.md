@@ -209,6 +209,12 @@ Publish a staging canary from `backend/`:
 npm run firmware:release -- <version> <new-build-number> BB-00000001 staging
 ```
 
+Publishing only makes the signed canary available to the selected device. It
+does not queue or install the update; the owner must approve it from Account →
+Settings → Firmware Update in the authenticated Mini App. Home-lab releases use
+the preparation and publication scripts documented in
+`../docs/HOMELAB_DEPLOYMENT.md`.
+
 Every published build number is immutable and must never be reused, even after
 a failure or revocation. The release key remains outside the repository. See
 `../docs/GLOBAL_OTA_RUNBOOK.md` for provisioning, monitoring, cohort expansion,

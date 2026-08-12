@@ -272,12 +272,13 @@ async function activeDeviceCredential(deviceId, env) {
   ).bind(deviceId).first();
 }
 
-async function latestFirmwareRelease(env) {
+async function latestFirmwareRelease(deviceId, env) {
   return env.DB.prepare(
-    `SELECT * FROM firmware_releases
-     WHERE status = 'active' AND board = ?
+    `SELECT r.* FROM firmware_releases r
+     JOIN firmware_rollouts ro ON ro.release_uuid = r.release_uuid
+     WHERE r.status = 'active' AND r.board = ? AND ro.device_id = ?
      ORDER BY build_number DESC LIMIT 1`
-  ).bind(FIRMWARE_BOARD).first();
+  ).bind(FIRMWARE_BOARD, deviceId).first();
 }
 
 async function firmwareRollout(deviceId, releaseId, env) {
@@ -309,7 +310,7 @@ async function firmwareUpdateSnapshot(device, env) {
       .bind(controlDeviceId).first();
   if (!controlDevice) return null;
 
-  const release = await latestFirmwareRelease(env);
+  const release = await latestFirmwareRelease(controlDeviceId, env);
   const releaseId = release?.release_uuid ?? null;
   const [rollout, command, credential, latest, wifiProfiles] = await Promise.all([
     firmwareRollout(controlDeviceId, releaseId, env),
@@ -1172,7 +1173,7 @@ export async function handleInstallFirmwareUpdateV2(
       .bind(controlDeviceId).first();
   if (!controlDevice) return json({ error: 'firmware_device_unavailable' }, 503);
 
-  const release = await latestFirmwareRelease(env);
+  const release = await latestFirmwareRelease(controlDeviceId, env);
   if (!release) return json({ error: 'firmware_update_unavailable' }, 404);
   if (Number(release.build_number) !== expectedBuild) {
     return json({

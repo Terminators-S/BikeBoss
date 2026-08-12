@@ -74,6 +74,12 @@ npm run dev
 - Copy `backend/.dev.vars.example` → `backend/.dev.vars` for local dev.
 - Per-device firmware config lives in `firmware/include/config.h`.
 
+## Home-lab hosting
+
+The production Docker Compose stack and migration notes live in
+`deploy/homelab/` and `docs/HOMELAB_DEPLOYMENT.md`. It serves the Mini App and
+API from one hostname with local SQLite storage and local signed-OTA objects.
+
 ## Status
 
 Production-capable release with signed global OTA, offline telemetry replay,

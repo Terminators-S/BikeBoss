@@ -29,6 +29,7 @@ build/
 __pycache__/
 *.pyc
 .venv/
+venv/
 payment-listener/*.session
 payment-listener/*.session-journal
 
@@ -71,3 +72,7 @@ logs/
 *.tar.gz
 .tmp/
 temp/
+
+# Home-lab runtime state (database, backups, OTA binaries, local Compose config)
+deploy/homelab/.env
+deploy/homelab/runtime/

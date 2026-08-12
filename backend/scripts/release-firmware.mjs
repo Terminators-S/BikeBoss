@@ -5,18 +5,24 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseCanonicalPayload } from '../src/lib/firmware-ota.js';
+import { buildFirmwareReleaseRegistrationSql } from '../src/lib/firmware-release.js';
 
 const scriptDirectory = fileURLToPath(new URL('.', import.meta.url));
 const backendDirectory = resolve(scriptDirectory, '..');
 const firmwareDirectory = resolve(backendDirectory, '..', 'firmware');
-const [version, rawBuild, deviceId = 'BB-00000001', environment = 'staging'] = process.argv.slice(2);
+const [version, rawBuild, deviceId = 'BB-00000001', environment = 'staging', ...notesParts]
+  = process.argv.slice(2);
 const buildNumber = Number(rawBuild);
+const notes = notesParts.join(' ').trim() || `BikeBoss ${version} staging update`;
 
 if (!/^[0-9A-Za-z.+_-]{1,32}$/u.test(version ?? '')
     || !Number.isSafeInteger(buildNumber) || buildNumber <= 0
     || !/^[A-Za-z0-9_-]{1,64}$/u.test(deviceId)
-    || environment !== 'staging') {
-  console.error('Usage: npm run firmware:release -- <version> <build-number> [device-id] staging');
+    || environment !== 'staging'
+    || notes.length > 500) {
+  console.error(
+    'Usage: npm run firmware:release -- <version> <build-number> [device-id] staging [release notes]',
+  );
   process.exit(2);
 }
 
@@ -52,18 +58,17 @@ const releaseQuery = runWranglerJson([
   '--env', environment, '--remote',
   '--command', `SELECT release_uuid, build_number, object_key, status
     FROM firmware_releases
-    WHERE build_number = ${buildNumber}
-       OR object_key = '${objectKey}'
+    ORDER BY build_number DESC
     LIMIT 1`,
 ]);
-const existingRelease = Array.isArray(releaseQuery)
+const latestReleaseResult = Array.isArray(releaseQuery)
   ? releaseQuery.find((entry) => Array.isArray(entry?.results))
   : releaseQuery;
-if (existingRelease?.results?.length) {
-  const prior = existingRelease.results[0];
+const latestRelease = latestReleaseResult?.results?.[0];
+if (latestRelease && buildNumber <= Number(latestRelease.build_number)) {
   throw new Error(
-    `Build ${buildNumber} is already published (${prior.release_uuid}); `
-      + 'use a new monotonic build number.',
+    `Build ${buildNumber} is not newer than published build ${latestRelease.build_number} `
+      + `(${latestRelease.release_uuid}); use a higher monotonic build number.`,
   );
 }
 
@@ -106,28 +111,7 @@ runWrangler([
   '--content-type', 'application/octet-stream',
 ], { cwd: backendDirectory, stdio: 'inherit' });
 
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-const sql = `
-INSERT INTO firmware_releases (
-  release_uuid, version, build_number, board, object_key,
-  size_bytes, sha256_hex, signature_b64, status, notes
-) VALUES (
-  ${sqlString(release.release_uuid)}, ${sqlString(version)}, ${buildNumber},
-  ${sqlString(release.board)}, ${sqlString(release.object_key)}, ${sizeBytes},
-  ${sqlString(sha256Hex)}, ${sqlString(release.signature_b64)}, 'active',
-  ${sqlString(`Canary release for ${deviceId}`)}
-);
-INSERT INTO firmware_rollouts (release_uuid, device_id)
-VALUES (${sqlString(release.release_uuid)}, ${sqlString(deviceId)});
-INSERT INTO device_commands (device_id, command, payload_json)
-VALUES (
-  ${sqlString(deviceId)}, 'OTA',
-  ${sqlString(JSON.stringify({ release_id: release.release_uuid }))}
-);
-`;
+const sql = buildFirmwareReleaseRegistrationSql(release, deviceId, notes);
 
 runWrangler([
   'd1', 'execute', 'bikeboss-db-staging',
@@ -142,4 +126,5 @@ console.log(JSON.stringify({
   size_bytes: sizeBytes,
   sha256: sha256Hex,
   environment,
+  activation: 'manual_mini_app_install_required',
 }, null, 2));

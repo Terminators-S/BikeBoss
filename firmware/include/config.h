@@ -22,7 +22,7 @@
 #define CLOUD_SCHEME         "https"
 #endif
 #ifndef CLOUD_HOST
-#define CLOUD_HOST           "api.creative-studio.blog"
+#define CLOUD_HOST           "bikeboss.creative-studio.blog"
 #endif
 #define CLOUD_PORT           443
 #ifndef USE_SIGNED_TELEMETRY_V2

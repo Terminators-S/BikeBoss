@@ -4,6 +4,41 @@
 
 ---
 
+## 2026-08-12 — Home-lab production cutover and OTA 0.1.4 ✅
+
+- Moved the production Mini App, API, Telegram webhook, payment relay, SQLite
+  database, scheduled work and signed firmware storage to the home-lab Docker
+  stack; Cloudflare now provides only DNS, TLS and Tunnel transport for
+  `bikeboss.creative-studio.blog`
+- Imported 4 users, 6 devices, 12,287 telemetry records, 273 events, 4 trusted
+  Wi-Fi profiles and the existing signed OTA history from D1/R2, with database
+  integrity, foreign-key, decryption and restart-persistence checks passing
+- Added a hostname-scoped Cloudflare Configuration Rule that disables the
+  Managed Challenge only for BikeBoss, preserving the rest of the zone's
+  protections while allowing the device API, Telegram webhook and OTA download
+- Switched Telegram's webhook and **Open BikeBoss** menu button to the home-lab
+  domain with zero pending updates, and changed the payment listener from the
+  staging Worker to the same domain
+- Published signed firmware `0.1.4` build `2026081206` for `BB-00000001`; it
+  retains the GPS drift confidence engine, Wi-Fi-only/any-internet choice and
+  announcement UX, and changes the firmware cloud host to the home server
+- Verified the 1,601,776-byte OTA through the public device-authenticated URL;
+  SHA-256 `9c2e4457c49d8035c685a7661e80aefe0b2dd0904e3d4cc671ad641ab45e2142`
+  matched exactly and the Mini App reports the release as installable without
+  queuing it automatically
+- Added container builds, Nginx same-origin proxying, D1/R2 compatibility
+  adapters, transactional migration, daily backups and reusable local firmware
+  preparation/publication tools
+
+## 2026-08-12 — Manual-approval OTA publishing gate ✅
+
+- Separated signed firmware publication from installation: publishing creates
+  only an immutable release and selected-device eligibility rollout, never a
+  device command
+- Scoped update discovery to the control device's rollout and added regression
+  coverage proving release SQL cannot queue OTA; the authenticated Mini App's
+  **Install update** action remains the only command-creation path
+
 ## 2026-08-12 — Repository prepared for home-lab migration ✅
 
 - Prepared the complete BikeBoss source and current OTA/GPS reliability release

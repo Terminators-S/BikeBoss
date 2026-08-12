@@ -1,0 +1,86 @@
+name: bikeboss
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/homelab/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - ${BIKEBOSS_ENV_FILE:-../../backend/.dev.vars}
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+      ENVIRONMENT: production
+      BIKEBOSS_DB_PATH: /data/bikeboss.sqlite
+      BIKEBOSS_IMPORT_SQL: /data/import.sql
+      BIKEBOSS_SCHEMA_PATH: /app/backend/schema.sql
+      BIKEBOSS_FIRMWARE_ROOT: /firmware
+      BIKEBOSS_BACKUP_ROOT: /backups
+      BIKEBOSS_BACKUP_RETENTION_DAYS: 14
+      ABA_PAYWAY_API_URL: https://payway.ababank.com/api
+      GEOFENCE_DEFAULT_RADIUS_M: 100
+      GEOFENCE_DEFAULT_ACCURACY_M: 15
+      HEARTBEAT_TIMEOUT_MS: 600000
+      CORS_ALLOWED_ORIGINS: https://bikeboss.creative-studio.blog
+      TELEGRAM_AUTH_MAX_AGE_SECONDS: 300
+      APP_SESSION_TTL_SECONDS: 900
+      DEVICE_REQUEST_MAX_SKEW_SECONDS: 300
+    volumes:
+      - ${BIKEBOSS_RUNTIME_DIR:-./runtime}/data:/data
+      - ${BIKEBOSS_RUNTIME_DIR:-./runtime}/firmware:/firmware
+      - ${BIKEBOSS_RUNTIME_DIR:-./runtime}/backups:/backups
+    expose:
+      - "8787"
+    networks:
+      - backend
+      - edge
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/homelab/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5173:8080"
+    networks:
+      - backend
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 128m
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  backend:
+    internal: true
+  edge:

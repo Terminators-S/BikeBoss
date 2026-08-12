@@ -109,6 +109,21 @@ test('device signature: canonical request is stable and body-sensitive', async (
   );
 });
 
+test('device signing key can use a self-hosted provisioned-key map', async () => {
+  const derived = await deriveDeviceSigningKey('master-secret', 'BB-00000001', 1);
+  const provisionedMap = JSON.stringify({
+    'BB-00000001:v1': hex(derived),
+  });
+  assert.deepEqual(
+    await deriveDeviceSigningKey(provisionedMap, 'BB-00000001', 1),
+    derived,
+  );
+  await assert.rejects(
+    deriveDeviceSigningKey(provisionedMap, 'BB-00000002', 1),
+    /No provisioned signing key/u,
+  );
+});
+
 test('device signature: server verifies active credential and rejects replay sequence', async () => {
   const nowMs = 1_800_000_000_000;
   const rawBody = '{"device_id":"BB-00000001","sequence":7}';

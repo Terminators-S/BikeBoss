@@ -4,6 +4,29 @@
 
 ---
 
+## ADR-011: Firmware publication never starts installation
+
+**Date:** 2026-08-12 · **Status:** Implemented on the home-lab production stack
+
+**Decision:** Publishing a signed firmware binary creates its immutable release
+record and one explicitly selected device eligibility rollout, but no device
+command. Release discovery joins that eligibility row to the tracker's control
+device. Only an authenticated, writable owner session pressing **Install
+update** may create the OTA command and choose Wi-Fi-only or any-internet
+delivery.
+
+**Why:** Building and uploading an image is an operator action, not rider
+consent to interrupt a tracker. Separating availability from installation makes
+the Mini App approval real, keeps canaries device-scoped and prevents a release
+script from racing the user by delivering the command on the next heartbeat.
+
+**Safety gates retained:** The tracker still requires a newer matching-board
+release, active signed-device credential, valid release signature, exact image
+size and SHA-256, a permitted connection, disarmed/stationary state, alternate
+OTA slot write, reboot and post-boot health acknowledgement.
+
+---
+
 ## ADR-010: Device-encrypted trusted Wi-Fi roaming with cellular fallback
 
 **Date:** 2026-08-09 · **Status:** Implemented and deployed to staging; COM7 field flash pending

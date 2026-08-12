@@ -201,6 +201,21 @@ export function buildDeviceCanonicalRequest({
 /** Derive a unique per-device/version signing key from a Worker master secret. */
 export async function deriveDeviceSigningKey(masterSecret, deviceId, keyVersion) {
   if (!masterSecret) throw new Error('DEVICE_KEY_MASTER is not configured');
+  // Self-hosted migrations cannot read an existing Cloudflare Worker secret
+  // back from the platform. A JSON object may therefore contain already-
+  // provisioned per-device keys, keyed as "DEVICE_ID:vVERSION". The value is
+  // kept only in the server secret file and never in source control.
+  if (typeof masterSecret === 'string' && masterSecret.trimStart().startsWith('{')) {
+    let provisionedKeys;
+    try {
+      provisionedKeys = JSON.parse(masterSecret);
+    } catch {
+      throw new Error('DEVICE_KEY_MASTER provisioned-key map is invalid JSON');
+    }
+    const directKey = hexToBytes(provisionedKeys?.[`${deviceId}:v${keyVersion}`]);
+    if (!directKey) throw new Error(`No provisioned signing key for ${deviceId}:v${keyVersion}`);
+    return directKey;
+  }
   return hmacBytes(masterSecret, `${deviceId}:v${keyVersion}`);
 }
 

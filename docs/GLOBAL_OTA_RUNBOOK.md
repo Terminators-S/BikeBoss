@@ -94,17 +94,25 @@ Set-Location backend
 npm run firmware:release -- <version> <new-build-number> BB-00000001 staging
 ```
 
-Example for the next build after the verified canary:
+Example for a manual-approval test build:
 
 ```powershell
-npm run firmware:release -- 0.1.3 2026081205 BB-00000001 staging
+npm run firmware:release -- 0.1.4 2026081206 BB-00000001 staging "Manual approval OTA test"
 ```
 
-The tool is intentionally locked to staging. It rejects a reused D1 build
-number before building or writing R2, builds the release firmware, uploads with
-Wrangler's `--remote` flag, and creates one device rollout. Treat every
-published build number and R2 object key as immutable, including revoked and
-failed releases.
+The tool is intentionally locked to staging. It rejects any build number that
+is not higher than the newest D1 release before building or writing R2, builds
+the release firmware, uploads with Wrangler's `--remote` flag, and creates one
+pending device eligibility rollout. It does **not** queue an OTA command. The
+owner must explicitly press **Install update** in the authenticated Mini App.
+Treat every published build number and object key as immutable, including
+revoked and failed releases.
+
+For home-lab publication, use
+`deploy/homelab/scripts/prepare-firmware-release.mjs`, transfer its generated
+release bundle to the server, then run
+`deploy/homelab/scripts/publish-firmware-release.sh <build-number>`. The same
+manual-approval and immutable-release rules apply.
 
 ## Install from the Mini App
 
