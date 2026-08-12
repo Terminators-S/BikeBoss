@@ -277,7 +277,7 @@ async function latestFirmwareRelease(deviceId, env) {
     `SELECT r.* FROM firmware_releases r
      JOIN firmware_rollouts ro ON ro.release_uuid = r.release_uuid
      WHERE r.status = 'active' AND r.board = ? AND ro.device_id = ?
-     ORDER BY build_number DESC LIMIT 1`
+     ORDER BY r.build_number DESC LIMIT 1`
   ).bind(FIRMWARE_BOARD, deviceId).first();
 }
 
