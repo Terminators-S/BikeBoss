@@ -67,6 +67,29 @@ const CORS_HEADERS = {
 const MAX_JSON_BODY_BYTES = 64 * 1024;
 const MAX_TELEMETRY_BODY_BYTES = 512;
 const MAX_TELEMETRY_BATCH_BODY_BYTES = 4 * 1024;
+const LEGACY_DEVICE_MIGRATION_PATHS = new Set([
+  '/api/v1/telemetry',
+  '/api/v1/heartbeat',
+  '/api/v1/crash',
+  '/api/v1/alert/powercut',
+]);
+
+export function deviceMigrationRelayUrl(requestUrl, configuredOrigin) {
+  if (!configuredOrigin) return null;
+  const source = new URL(requestUrl);
+  if (!source.pathname.startsWith('/api/v2/device/')
+      && !LEGACY_DEVICE_MIGRATION_PATHS.has(source.pathname)) {
+    return null;
+  }
+  const origin = new URL(configuredOrigin);
+  if (origin.protocol !== 'https:' || origin.pathname !== '/' || origin.search || origin.hash) {
+    throw new Error('DEVICE_MIGRATION_ORIGIN must be an HTTPS origin without a path');
+  }
+  if (source.origin === origin.origin) return null;
+  origin.pathname = source.pathname;
+  origin.search = source.search;
+  return origin;
+}
 
 function requestBodyLimit(pathname) {
   if (pathname === '/api/v2/device/telemetry') return MAX_TELEMETRY_BODY_BYTES;
@@ -80,6 +103,17 @@ async function routeRequest(request, env, ctx) {
   const url = new URL(request.url);
   const { pathname } = url;
   const method = request.method;
+
+  // Temporary bootstrap bridge: a tracker on the previous build still calls
+  // the staging Worker. Forward only device-originated routes to the home-lab
+  // API so the rider-approved endpoint migration OTA can reach it. Requests
+  // retain their signed path/body and are re-verified by the home server.
+  const relayUrl = deviceMigrationRelayUrl(request.url, env.DEVICE_MIGRATION_ORIGIN);
+  if (relayUrl) {
+    const relayedRequest = new Request(relayUrl, request);
+    relayedRequest.headers.set('X-BikeBoss-Migration-Relay', 'staging-worker');
+    return fetch(relayedRequest);
+  }
 
   if (method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });

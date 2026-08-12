@@ -22,6 +22,10 @@
 - Published signed firmware `0.1.4` build `2026081206` for `BB-00000001`; it
   retains the GPS drift confidence engine, Wi-Fi-only/any-internet choice and
   announcement UX, and changes the firmware cloud host to the home server
+- Deployed staging Worker version `565fe6cf-5280-454e-8518-a7683672e253` as a
+  narrow bootstrap relay for device-originated API paths only; the tracker on
+  `0.1.3` can therefore receive the rider-approved migration OTA from the home
+  server, then bypasses the Worker permanently after `0.1.4` starts
 - Verified the 1,601,776-byte OTA through the public device-authenticated URL;
   SHA-256 `9c2e4457c49d8035c685a7661e80aefe0b2dd0904e3d4cc671ad641ab45e2142`
   matched exactly and the Mini App reports the release as installable without

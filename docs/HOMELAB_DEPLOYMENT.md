@@ -77,6 +77,14 @@ placing the binary and transactionally registering its selected-device pending
 rollout. It never creates an OTA command. The owner must open **Account →
 Settings → Firmware Update** and press **Install update**.
 
+During the first endpoint-migration release, the staging Worker may set
+`DEVICE_MIGRATION_ORIGIN` to this home-lab origin. That Worker forwards only
+device-originated `/api/v2/device/*` and the four legacy device-ingest paths,
+preserving the signed path and body for verification by the home server. This
+lets a tracker on the previous Worker-host build receive the rider-approved OTA.
+After the migration build boots, its compiled `CLOUD_HOST` connects directly to
+the home server and the relay is no longer in its traffic path.
+
 ## Data migration
 
 Before first start, place the D1 SQL export at `runtime/data/import.sql`. On a
