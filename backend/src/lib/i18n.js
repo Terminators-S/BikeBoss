@@ -44,7 +44,15 @@ export const botStrings = {
       `Zone: ${d.zone}`,
       `Distance: ${d.distance}m (limit: ${d.radius}m)`,
       `Speed: ${d.speed} km/h`,
+      `GPS accuracy: ±${d.accuracy}m`,
       d.locationLink ?? '',
+    ].join('\n'),
+
+    geofenceResolved: (d) => [
+      '✅ <b>Bike Returned to Safe Zone</b>',
+      '',
+      `Device: <code>${d.deviceId}</code>`,
+      `Zone: ${d.zone}`,
     ].join('\n'),
 
     heartbeatTimeout: (d) => [
@@ -100,7 +108,15 @@ export const botStrings = {
       `តំបន់: ${d.zone}`,
       `ចម្ងាយ: ${d.distance}m (កំណត់: ${d.radius}m)`,
       `ល្បឿន: ${d.speed} km/h`,
+      `ភាពត្រឹមត្រូវ GPS: ±${d.accuracy}m`,
       d.locationLink ?? '',
+    ].join('\n'),
+
+    geofenceResolved: (d) => [
+      '✅ <b>ម៉ូតូបានត្រឡប់ចូលតំបន់សុវត្ថិភាព</b>',
+      '',
+      `ឧបករណ៍: <code>${d.deviceId}</code>`,
+      `តំបន់: ${d.zone}`,
     ].join('\n'),
 
     heartbeatTimeout: (d) => [

@@ -76,4 +76,6 @@ npm run dev
 
 ## Status
 
-Scaffold phase. Cloud API works locally with mocked devices; hardware bring-up next.
+Production-capable release with signed global OTA, offline telemetry replay,
+intelligent GPS drift filtering, Telegram Mini App controls, and verified
+ESP32-S3 hardware updates. See `docs/PROGRESS.md` for the latest release record.

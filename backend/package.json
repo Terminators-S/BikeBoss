@@ -10,10 +10,12 @@
     "db:create": "wrangler d1 create bikeboss-db",
     "db:schema": "wrangler d1 execute bikeboss-db --file=./schema.sql",
     "db:schema:local": "wrangler d1 execute bikeboss-db --local --file=./schema.sql",
+    "device:key": "node scripts/derive-device-key.mjs",
+    "firmware:release": "node scripts/release-firmware.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
     "simulate": "node scripts/simulate-device.mjs"
   },
   "devDependencies": {
-    "wrangler": "^3.78.0"
+    "wrangler": "^4.120.0"
   }
 }

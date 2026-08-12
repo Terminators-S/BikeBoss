@@ -33,8 +33,10 @@ export function LanguageProvider({ children }) {
   // Sync from backend (authoritative) once on mount
   useEffect(() => {
     if (!tg?.userId) return;
-    api.getLanguage(tg.userId)
-      .then(({ language }) => {
+    api.startSession(tg.initData)
+      .then(() => api.meSecure())
+      .then(({ user }) => {
+        const language = user?.language;
         if (language && SUPPORTED_LANGUAGES.includes(language) && language !== lang) {
           setLangState(language);
           persistLanguage(language);
@@ -49,9 +51,13 @@ export function LanguageProvider({ children }) {
     persistLanguage(next);
     // Write through to backend so the bot follows the same language
     if (tg?.userId) {
-      api.setLanguage(tg.userId, next).catch(() => {});
+      api.setLanguageSecure(next).catch(() => {});
     }
   };
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   return (
     <LanguageContext.Provider value={{ lang, t: translations[lang], setLang }}>

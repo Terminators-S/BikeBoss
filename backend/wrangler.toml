@@ -4,7 +4,9 @@
 
 name = "bikeboss-api"
 main = "src/index.js"
-compatibility_date = "2025-01-01"
+workers_dev = true
+compatibility_date = "2026-08-08"
+compatibility_flags = ["nodejs_compat"]
 
 # ---------------------------------------------------------------------------
 # D1 Database Binding
@@ -14,6 +16,10 @@ binding = "DB"
 database_name = "bikeboss-db"
 database_id = "39b92178-4c87-41e4-83ce-0044091bac15"
 
+[[r2_buckets]]
+binding = "FIRMWARE"
+bucket_name = "bikeboss-firmware"
+
 # ---------------------------------------------------------------------------
 # Environment Variables
 # ---------------------------------------------------------------------------
@@ -22,11 +28,18 @@ database_id = "39b92178-4c87-41e4-83ce-0044091bac15"
 #   TELEGRAM_BOT_TOKEN
 #   ABA_PAYWAY_MERCHANT_ID
 #   ABA_PAYWAY_API_KEY
+#   APP_SESSION_SECRET
+#   DEVICE_KEY_MASTER
 # ---------------------------------------------------------------------------
 [vars]
 ABA_PAYWAY_API_URL = "https://payway.ababank.com/api"
 GEOFENCE_DEFAULT_RADIUS_M = 100
+GEOFENCE_DEFAULT_ACCURACY_M = 15
 HEARTBEAT_TIMEOUT_MS = 600000
+CORS_ALLOWED_ORIGINS = "https://bikeboss.creative-studio.blog,http://localhost:5173"
+TELEGRAM_AUTH_MAX_AGE_SECONDS = 300
+APP_SESSION_TTL_SECONDS = 900
+DEVICE_REQUEST_MAX_SKEW_SECONDS = 300
 
 # ---------------------------------------------------------------------------
 # Cron Triggers
@@ -45,5 +58,40 @@ zone_name = "creative-studio.blog"
 # Observability
 # ---------------------------------------------------------------------------
 [observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# ---------------------------------------------------------------------------
+# Staging — isolated Worker + D1, no custom production route or cron triggers
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "bikeboss-api-staging"
+workers_dev = true
+routes = []
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "bikeboss-db-staging"
+database_id = "617dbd82-480c-431c-87cd-02dac0f0d605"
+
+[[env.staging.r2_buckets]]
+binding = "FIRMWARE"
+bucket_name = "bikeboss-firmware-staging"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+ABA_PAYWAY_API_URL = "https://payway.ababank.com/api"
+GEOFENCE_DEFAULT_RADIUS_M = 100
+GEOFENCE_DEFAULT_ACCURACY_M = 15
+HEARTBEAT_TIMEOUT_MS = 30000
+CORS_ALLOWED_ORIGINS = "https://staging.bikeboss-app.pages.dev,https://bikeboss.creative-studio.blog,http://localhost:5173"
+TELEGRAM_AUTH_MAX_AGE_SECONDS = 300
+APP_SESSION_TTL_SECONDS = 900
+DEVICE_REQUEST_MAX_SKEW_SECONDS = 300
+
+[env.staging.triggers]
+crons = []
+
+[env.staging.observability]
 enabled = true
 head_sampling_rate = 1.0

@@ -17,12 +17,36 @@
  *   GET  /health                  — liveness probe
  */
 
-import { handleTelemetry, handleCrash, handlePowerCutAlert } from './routes/telemetry.js';
+import {
+  handleTelemetry, handleTelemetryV2, handleTelemetryBatchV2,
+  handleCrash, handlePowerCutAlert,
+} from './routes/telemetry.js';
 import { handleTelegramWebhook } from './routes/telegram.js';
-import { handleGetDeviceStatus, handleGetTrips, handleSetGeofence, handleGetLanguage, handleSetLanguage } from './routes/api.js';
+import {
+  handleGetDeviceStatus, handleGetTrips, handleSetGeofence,
+  handleGetLanguage, handleSetLanguage, handleRegisterUser,
+  handleGetMe, handleDeviceCommand, handleLinkDevice,
+  handleGeofenceHere, handleGetActivity,
+} from './routes/api.js';
 import { handlePayWayWebhook, createInvoice, handleInvoiceStatus } from './lib/payments.js';
 import { checkHeartbeatTimeout } from './lib/geofence.js';
 import { sendTelegramMessage } from './lib/telegram.js';
+import { authenticateUserRequest } from './lib/auth.js';
+import { handleFirmwareDownloadV2 } from './lib/firmware-ota.js';
+import {
+  handleTelegramSession, handleGetMeV2, handleGetLiveDeviceV2,
+  handleGetDeviceTrailV2, handleGetTripV2,
+  handleListZonesV2, handleCreateZoneV2, handleUpdateZoneV2,
+  handleArchiveZoneV2, handleGetActivityV2, handleSetLanguageV2,
+  handleLinkDeviceV2, handleDeviceCommandV2, handleGetDeviceCommandV2,
+  handleListWifiProfilesV2, handleCreateWifiProfileV2,
+  handleUpdateWifiProfileV2, handleArchiveWifiProfileV2,
+  handleGetFirmwareUpdateV2, handleInstallFirmwareUpdateV2,
+  handleAcknowledgeGeofenceEventV2,
+  handleListPlaceSuggestionsV2, handleAcceptPlaceSuggestionV2,
+  handleDismissPlaceSuggestionV2,
+  handleCreateInvoiceV2, handleGetInvoiceStatusV2,
+} from './routes/v2.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -31,12 +55,28 @@ const json = (data, status = 200) =>
   });
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': [
+    'Content-Type', 'Authorization', 'If-Match',
+    'X-BikeBoss-Auth',
+    'X-BikeBoss-Timestamp', 'X-BikeBoss-Sequence',
+    'X-BikeBoss-Key-Version', 'X-BikeBoss-Signature',
+  ].join(', '),
 };
 
-async function routeRequest(request, env) {
+const MAX_JSON_BODY_BYTES = 64 * 1024;
+const MAX_TELEMETRY_BODY_BYTES = 512;
+const MAX_TELEMETRY_BATCH_BODY_BYTES = 4 * 1024;
+
+function requestBodyLimit(pathname) {
+  if (pathname === '/api/v2/device/telemetry') return MAX_TELEMETRY_BODY_BYTES;
+  if (pathname === '/api/v2/device/telemetry/batch') {
+    return MAX_TELEMETRY_BATCH_BODY_BYTES;
+  }
+  return MAX_JSON_BODY_BYTES;
+}
+
+async function routeRequest(request, env, ctx) {
   const url = new URL(request.url);
   const { pathname } = url;
   const method = request.method;
@@ -49,19 +89,208 @@ async function routeRequest(request, env) {
     return json({ status: 'ok', service: 'bikeboss-api', time: new Date().toISOString() });
   }
 
+  if (method === 'GET' && pathname === '/webhook/telegram') {
+    return json({
+      status: 'ok',
+      service: 'bikeboss-telegram-webhook',
+      accepts: 'POST',
+      time: new Date().toISOString(),
+    });
+  }
+
   let body = {};
-  if (method === 'POST') {
+  let rawBody = '';
+  if (['POST', 'PATCH', 'DELETE'].includes(method)) {
+    const maximumBodyBytes = requestBodyLimit(pathname);
+    const contentLength = Number(request.headers.get('content-length') ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > maximumBodyBytes) {
+      return json({ error: 'request_too_large' }, 413);
+    }
     const contentType = request.headers.get('content-type') || '';
     try {
+      rawBody = await request.text();
+      if (new TextEncoder().encode(rawBody).byteLength > maximumBodyBytes) {
+        return json({ error: 'request_too_large' }, 413);
+      }
       if (contentType.includes('application/json')) {
-        body = await request.json();
+        body = rawBody ? JSON.parse(rawBody) : {};
       } else {
-        const text = await request.text();
-        body = Object.fromEntries(new URLSearchParams(text));
+        body = Object.fromEntries(new URLSearchParams(rawBody));
       }
     } catch {
-      body = {};
+      return json({ error: 'invalid_request_body' }, 400);
     }
+  }
+
+  // --- Version 2 Mini App authentication ---
+  if (method === 'POST' && pathname === '/api/v2/auth/telegram') {
+    return handleTelegramSession(body, env);
+  }
+
+  if (method === 'POST' && pathname === '/api/v2/device/telemetry') {
+    return handleTelemetryV2(request, rawBody, body, env, ctx);
+  }
+
+  if (method === 'POST' && pathname === '/api/v2/device/telemetry/batch') {
+    return handleTelemetryBatchV2(request, rawBody, body, env, ctx);
+  }
+
+  const firmwareDownloadMatch = /^\/api\/v2\/device\/([^/]+)\/firmware\/([^/]+)$/u.exec(pathname);
+  if (method === 'GET' && firmwareDownloadMatch) {
+    return handleFirmwareDownloadV2(
+      request,
+      decodeURIComponent(firmwareDownloadMatch[1]),
+      decodeURIComponent(firmwareDownloadMatch[2]),
+      env,
+    );
+  }
+
+  if (pathname.startsWith('/api/v2/')) {
+    const actor = await authenticateUserRequest(request, env);
+    if (!actor) return json({ error: 'unauthorized' }, 401);
+    const requestId = request.headers.get('CF-Ray') ?? crypto.randomUUID();
+
+    if (method === 'GET' && pathname === '/api/v2/me') {
+      return handleGetMeV2(actor, env);
+    }
+    if (method === 'GET' && pathname === '/api/v2/activity') {
+      return handleGetActivityV2(actor, env);
+    }
+    const tripMatch = /^\/api\/v2\/trips\/([^/]+)$/u.exec(pathname);
+    if (method === 'GET' && tripMatch) {
+      return handleGetTripV2(actor, decodeURIComponent(tripMatch[1]), env);
+    }
+    if (method === 'PATCH' && pathname === '/api/v2/me/language') {
+      return handleSetLanguageV2(actor, body, env, requestId);
+    }
+    if (method === 'POST' && pathname === '/api/v2/devices/link') {
+      return handleLinkDeviceV2(actor, body, env, requestId);
+    }
+    if (method === 'POST' && pathname === '/api/v2/invoices') {
+      return handleCreateInvoiceV2(actor, env, requestId);
+    }
+    const invoiceMatch = /^\/api\/v2\/invoices\/([^/]+)$/u.exec(pathname);
+    if (method === 'GET' && invoiceMatch) {
+      return handleGetInvoiceStatusV2(actor, decodeURIComponent(invoiceMatch[1]), env);
+    }
+
+    const liveMatch = /^\/api\/v2\/devices\/([^/]+)\/live$/u.exec(pathname);
+    if (method === 'GET' && liveMatch) {
+      return handleGetLiveDeviceV2(actor, decodeURIComponent(liveMatch[1]), env);
+    }
+
+    const trailMatch = /^\/api\/v2\/devices\/([^/]+)\/trail$/u.exec(pathname);
+    if (method === 'GET' && trailMatch) {
+      return handleGetDeviceTrailV2(
+        actor,
+        decodeURIComponent(trailMatch[1]),
+        url,
+        env,
+      );
+    }
+
+    const zonesMatch = /^\/api\/v2\/devices\/([^/]+)\/zones$/u.exec(pathname);
+    if (zonesMatch) {
+      const deviceId = decodeURIComponent(zonesMatch[1]);
+      if (method === 'GET') return handleListZonesV2(actor, deviceId, env);
+      if (method === 'POST') {
+        return handleCreateZoneV2(actor, deviceId, body, env, requestId);
+      }
+    }
+
+    const suggestionsMatch = /^\/api\/v2\/devices\/([^/]+)\/suggestions$/u.exec(pathname);
+    if (method === 'GET' && suggestionsMatch) {
+      return handleListPlaceSuggestionsV2(
+        actor,
+        decodeURIComponent(suggestionsMatch[1]),
+        env,
+      );
+    }
+
+    const wifiProfilesMatch = /^\/api\/v2\/devices\/([^/]+)\/wifi-profiles$/u.exec(pathname);
+    if (wifiProfilesMatch) {
+      const deviceId = decodeURIComponent(wifiProfilesMatch[1]);
+      if (method === 'GET') return handleListWifiProfilesV2(actor, deviceId, env);
+      if (method === 'POST') {
+        return handleCreateWifiProfileV2(actor, deviceId, body, env, requestId);
+      }
+    }
+
+    const wifiProfileMatch = /^\/api\/v2\/wifi-profiles\/([^/]+)$/u.exec(pathname);
+    if (wifiProfileMatch) {
+      const profileId = decodeURIComponent(wifiProfileMatch[1]);
+      if (method === 'PATCH') {
+        return handleUpdateWifiProfileV2(actor, profileId, body, env, requestId);
+      }
+      if (method === 'DELETE') {
+        return handleArchiveWifiProfileV2(actor, profileId, body, env, requestId);
+      }
+    }
+
+    const commandMatch = /^\/api\/v2\/devices\/([^/]+)\/commands$/u.exec(pathname);
+    if (method === 'POST' && commandMatch) {
+      return handleDeviceCommandV2(
+        actor,
+        decodeURIComponent(commandMatch[1]),
+        body,
+        env,
+        requestId,
+      );
+    }
+    const firmwareUpdateMatch = /^\/api\/v2\/devices\/([^/]+)\/firmware-update$/u.exec(pathname);
+    if (firmwareUpdateMatch) {
+      const deviceId = decodeURIComponent(firmwareUpdateMatch[1]);
+      if (method === 'GET') {
+        return handleGetFirmwareUpdateV2(actor, deviceId, env);
+      }
+      if (method === 'POST') {
+        return handleInstallFirmwareUpdateV2(
+          actor,
+          deviceId,
+          body,
+          env,
+          requestId,
+        );
+      }
+    }
+    const commandStatusMatch = /^\/api\/v2\/devices\/([^/]+)\/commands\/(\d+)$/u.exec(pathname);
+    if (method === 'GET' && commandStatusMatch) {
+      return handleGetDeviceCommandV2(
+        actor,
+        decodeURIComponent(commandStatusMatch[1]),
+        Number(commandStatusMatch[2]),
+        env,
+      );
+    }
+    const eventAckMatch = /^\/api\/v2\/geofence-events\/([^/]+)\/acknowledge$/u.exec(pathname);
+    if (method === 'POST' && eventAckMatch) {
+      return handleAcknowledgeGeofenceEventV2(
+        actor,
+        decodeURIComponent(eventAckMatch[1]),
+        env,
+        requestId,
+      );
+    }
+    const suggestionActionMatch = /^\/api\/v2\/suggestions\/([^/]+)\/(accept|dismiss)$/u.exec(pathname);
+    if (method === 'POST' && suggestionActionMatch) {
+      const suggestionId = decodeURIComponent(suggestionActionMatch[1]);
+      return suggestionActionMatch[2] === 'accept'
+        ? handleAcceptPlaceSuggestionV2(actor, suggestionId, body, env, requestId)
+        : handleDismissPlaceSuggestionV2(actor, suggestionId, env, requestId);
+    }
+
+    const zoneMatch = /^\/api\/v2\/zones\/([^/]+)$/u.exec(pathname);
+    if (zoneMatch) {
+      const zoneUuid = decodeURIComponent(zoneMatch[1]);
+      if (method === 'PATCH') {
+        return handleUpdateZoneV2(actor, zoneUuid, body, env, requestId);
+      }
+      if (method === 'DELETE') {
+        return handleArchiveZoneV2(actor, zoneUuid, body, env, requestId);
+      }
+    }
+
+    return json({ error: 'not_found', path: pathname }, 404);
   }
 
   // --- Device uplink ---
@@ -83,6 +312,25 @@ async function routeRequest(request, env) {
   }
   if (method === 'POST' && pathname === '/api/v1/geofence/set') {
     return handleSetGeofence(body, env);
+  }
+  if (method === 'POST' && pathname === '/api/v1/geofence/here') {
+    return handleGeofenceHere(body, env);
+  }
+  if (method === 'GET' && pathname.startsWith('/api/v1/me/')) {
+    return handleGetMe(pathname.split('/api/v1/me/')[1], env);
+  }
+  if (method === 'GET' && pathname.startsWith('/api/v1/activity/')) {
+    return handleGetActivity(pathname.split('/api/v1/activity/')[1], env);
+  }
+  if (method === 'POST' && pathname.startsWith('/api/v1/device/') && pathname.endsWith('/command')) {
+    const deviceId = pathname.split('/api/v1/device/')[1].replace('/command', '');
+    return handleDeviceCommand(deviceId, body, env);
+  }
+  if (method === 'POST' && pathname === '/api/v1/device/link') {
+    return handleLinkDevice(body, env);
+  }
+  if (method === 'POST' && pathname === '/api/v1/user/register') {
+    return handleRegisterUser(body, env);
   }
   if (method === 'GET' && pathname.startsWith('/api/v1/user/') && pathname.endsWith('/language')) {
     const telegramId = pathname.split('/api/v1/user/')[1].replace('/language', '');
@@ -111,13 +359,32 @@ async function routeRequest(request, env) {
   return json({ error: 'Not found', path: pathname }, 404);
 }
 
+function withCors(response, request, env) {
+  const headers = new Headers(response.headers);
+  headers.delete('Access-Control-Allow-Origin');
+  for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+  const origin = request.headers.get('Origin');
+  const allowedOrigins = String(env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (origin && allowedOrigins.includes(origin)) {
+    headers.set('Access-Control-Allow-Origin', origin);
+    headers.append('Vary', 'Origin');
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     try {
-      return await routeRequest(request, env);
+      return withCors(await routeRequest(request, env, ctx), request, env);
     } catch (err) {
-      console.error('Worker error:', err);
-      return json({ error: 'Internal server error', message: err.message }, 500);
+      console.error(JSON.stringify({
+        message: 'worker_request_failed',
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return withCors(json({ error: 'internal_server_error' }, 500), request, env);
     }
   },
 

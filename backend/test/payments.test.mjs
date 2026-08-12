@@ -40,7 +40,8 @@ test('KHQR: tag 30 uses ABA PayWay GUID + account + acquirer', () => {
   const p = buildKHQRPayload({ ...BASE, amount: 15.0 });
   const t = tlvParse(p);
   assert.ok(t['30'].includes('abaakhppxxx@abaa'), 'ABA GUID present');
-  assert.ok(t['30'].includes('126080611440965@abaa'), 'merchant account present');
+  assert.ok(t['30'].includes('126080611440965'), 'merchant account present');
+  assert.ok(!t['30'].includes('126080611440965@abaa'), 'merchant account omits Bakong suffix');
   assert.ok(t['30'].includes('ABA Bank'), 'acquirer present');
 });
 
@@ -55,10 +56,9 @@ test('KHQR: amount and USD currency encoded', () => {
   assert.equal(t['54'], '15.01');
 });
 
-test('KHQR: bill number carries PAYWAY@ABA prefix + invoice ref, store label ABA', () => {
+test('KHQR: additional data carries invoice ref and store label without a fake PayWay session', () => {
   const t = tlvParse(buildKHQRPayload({ ...BASE, amount: 15.0, invoiceRef: 'BB-INV-42' }));
-  const add = tlvParse(t['62'].padEnd(t['62'].length + 4, '0')); // nested TLV needs re-parse
-  assert.ok(t['62'].includes('PAYWAY@ABA'), 'PAYWAY bill prefix present');
+  assert.ok(!t['62'].includes('PAYWAY@ABA'), 'no fabricated PayWay session prefix');
   assert.ok(t['62'].includes('BB-INV-42'), 'invoice ref in bill number');
   assert.ok(t['62'].includes('02' + '03ABA'), 'store label ABA present');
 });
@@ -108,5 +108,6 @@ test('KHQR: matches the real decoded PayWay structure field-by-field', () => {
     assert.equal(t[tag], val, `tag ${tag}`);
   }
   assert.ok(t['30'].includes('abaakhppxxx@abaa'));
-  assert.ok(t['30'].includes('126080611440965@abaa'));
+  assert.ok(t['30'].includes('126080611440965'));
+  assert.ok(!t['30'].includes('126080611440965@abaa'));
 });

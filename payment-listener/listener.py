@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
 """
-BikeBoss ABA Payment Listener
-=============================
+BikeBoss ABA payment listener.
 
-Two jobs:
-
-1. LISTEN (primary): Pyrogram user-client watches the ABA bank notification
-   chat, parses Trx ID + amount, forwards to the BikeBoss worker webhook.
-   The worker matches the collision-free amount against pending invoices.
-
-2. QR FALLBACK: /qr?amount=15.01 HTTP endpoint that scrapes the merchant's
-   static PayWay link with Playwright and returns the rendered QR as base64.
-   Only used if the worker-side EMV QR ever fails (rare). Requires:
-     pip install playwright && playwright install chromium
+Watches the ABA notification chat and forwards verified transaction IDs to the
+BikeBoss payment webhook. It also exposes a localhost QR fallback service that
+returns ABA's real QR string when available, with the rendered image as a
+fallback.
 """
 
 import os
@@ -30,14 +23,12 @@ import requests
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-
-def load_env(path=".env"):
+def load_env(path=None):
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if not os.path.exists(path):
         return
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
@@ -54,30 +45,15 @@ WEBHOOK_URL = os.environ.get(
     "https://api.creative-studio.blog/webhook/abapayway",
 )
 WEBHOOK_SECRET = os.environ["PAYMENT_WEBHOOK_SECRET"]
-PAYWAY_STATIC_LINK = os.environ.get(
-    "PAYWAY_STATIC_LINK",
-    "https://link.payway.com.kh/ABAPAY30494500t",
-)
+PAYWAY_STATIC_LINK = os.environ.get("PAYWAY_STATIC_LINK", "https://link.payway.com.kh/ABAPAY30494500t")
 QR_HTTP_PORT = int(os.environ.get("QR_HTTP_PORT", "8791"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("bikeboss-listener")
 
-# ---------------------------------------------------------------------------
-# Part 1 — Bank notification parsing (EN + KM, from link_khqr_tg.md Pillar 3)
-# ---------------------------------------------------------------------------
-
-TRX_RE = re.compile(
-    r"(?:Trx\.?\s*ID:|លេខប្រតិបត្តិការ:|Transaction\s*ID:|Txn\s*ID:|ID:)\s*(\d{8,})",
-    re.IGNORECASE,
-)
-AMOUNT_RE = re.compile(
-    r"(?:\$|USD\s*)(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*USD",
-    re.IGNORECASE,
-)
-
-
 def parse_aba_transaction_text(text: str):
+    TRX_RE = re.compile(r"(?:Trx\.?\s*ID:|លេខប្រតិបត្តិការ:|Transaction\s*ID:|Txn\s*ID:|ID:)\s*(\d{8,})", re.IGNORECASE)
+    AMOUNT_RE = re.compile(r"(?:\$|USD\s*)(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*USD", re.IGNORECASE)
     trx = TRX_RE.search(text)
     amt = AMOUNT_RE.search(text)
     trx_id = trx.group(1) if trx else None
@@ -90,9 +66,7 @@ def parse_aba_transaction_text(text: str):
             amount = None
     return trx_id, amount
 
-
 seen_trx_ids = set()
-
 
 def forward_to_worker(trx_id: str, amount: float) -> bool:
     if trx_id in seen_trx_ids:
@@ -116,7 +90,6 @@ def forward_to_worker(trx_id: str, amount: float) -> bool:
         time.sleep(2 * (attempt + 1))
     return False
 
-
 async def handle_aba_message(client, message):
     text = message.text or message.caption or ""
     if not text:
@@ -127,13 +100,9 @@ async def handle_aba_message(client, message):
     log.info("ABA notification: trx=%s $%.2f", trx_id, amount)
     forward_to_worker(trx_id, amount)
 
-
-# ---------------------------------------------------------------------------
-# Part 2 — Playwright QR scraper (fallback only)
-# ---------------------------------------------------------------------------
-
+# QR Fallback with network intercept for qr_string (real ABA QR)
 async def scrape_payway_qr(amount: float):
-    """Render the static PayWay link with the given amount, extract QR canvas."""
+    """Return ABA's QR payload and rendered image for the given amount."""
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -142,16 +111,37 @@ async def scrape_payway_qr(amount: float):
             args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
         )
         page = await browser.new_page()
+        qr_string = None
+
+        async def capture_qr_response(response):
+            nonlocal qr_string
+            try:
+                content_type = response.headers.get("content-type", "")
+                if "json" not in content_type:
+                    return
+                data = await response.json()
+                value = data.get("qr_string") if isinstance(data, dict) else None
+                if value and str(value).startswith("000201"):
+                    qr_string = str(value)
+            except Exception:
+                return
+
+        page.on("response", capture_qr_response)
         try:
             await page.goto(PAYWAY_STATIC_LINK, wait_until="networkidle", timeout=15000)
             await page.fill("#txt_amount", f"{amount:.2f}")
             await page.click("button.st-button")
             await page.wait_for_selector("canvas", timeout=10000)
             await page.wait_for_timeout(1000)
-            return await page.evaluate(
+            image = await page.evaluate(
                 "() => { const c = document.querySelector('canvas');"
                 " return c ? c.toDataURL('image/png') : null; }"
             )
+            return {
+                "qr_string": qr_string,
+                "qr_image_base64": image,
+                "source": "payway-service",
+            }
         finally:
             await browser.close()
 
@@ -175,22 +165,26 @@ class QRFallbackHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            data_url = asyncio.run(asyncio.wait_for(scrape_payway_qr(amount), timeout=25.0))
-            if not data_url:
-                raise RuntimeError("no canvas")
-            body = json.dumps({"qr_base64": data_url, "amount": amount}).encode()
+            result = asyncio.run(asyncio.wait_for(scrape_payway_qr(amount), timeout=25.0))
+            if not result.get("qr_string") and not result.get("qr_image_base64"):
+                raise RuntimeError("no QR data")
+            body = json.dumps({**result, "amount": amount}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        except Exception as e:
-            log.error("QR scrape failed: %s", e)
+        except Exception as error:
+            log.error("QR scrape failed: %s", error)
+            body = b'{"error":"qr service unavailable"}'
             self.send_response(502)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(b'{"error":"qr service unavailable"}')
+            self.wfile.write(body)
 
     def log_message(self, *args):
-        pass  # quiet
+        pass
 
 
 def run_qr_server():
@@ -199,20 +193,15 @@ def run_qr_server():
     server.serve_forever()
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main():
     log.info("Starting BikeBoss payment listener…")
     log.info("Watching chat %s → %s", ABA_GROUP_ID, WEBHOOK_URL)
 
-    # QR fallback HTTP server in a side thread (only if playwright available)
     try:
         import playwright  # noqa: F401
         threading.Thread(target=run_qr_server, daemon=True).start()
     except ImportError:
-        log.info("Playwright not installed — QR fallback disabled (EMV primary is fine)")
+        log.info("Playwright not installed — QR fallback disabled")
 
     app = Client("bikeboss_listener", api_id=API_ID, api_hash=API_HASH)
     app.add_handler(

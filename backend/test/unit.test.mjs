@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { haversineDistance, toRadians } from '../src/lib/geo.js';
 import {
   accelMagnitude, gyroMagnitude, ema, scoreTrip,
+  advanceGpsSpeedFilter, calibrateGravityVector, projectOntoUpright,
   CRASH_IMPACT_THRESHOLD, CRASH_ROTATION_THRESHOLD, CRASH_FLAT_Z_THRESHOLD,
 } from '../src/lib/imu.js';
 
@@ -69,9 +70,31 @@ test('crash stage-2: tumbling rotation triggers', () => {
   assert.ok(g > CRASH_ROTATION_THRESHOLD, `${g} should exceed ${CRASH_ROTATION_THRESHOLD}`);
 });
 
-test('crash stage-3: bike on side — |Az| below 3.0 m/s²', () => {
-  assert.ok(Math.abs(1.2) < CRASH_FLAT_Z_THRESHOLD);
-  assert.ok(Math.abs(9.5) > CRASH_FLAT_Z_THRESHOLD); // upright → no crash
+test('gravity-vector calibration keeps a normal lean near 1g, not impact force', () => {
+  const calibration = calibrateGravityVector(8, 0, 23.9);
+  assert.ok(calibration);
+  const leaned = {
+    x: 0,
+    y: 25.2 * calibration.scale,
+    z: 0,
+  };
+  assert.ok(Math.abs(accelMagnitude(leaned.x, leaned.y, leaned.z) - 9.80665) < 0.02);
+  assert.ok(accelMagnitude(leaned.x, leaned.y, leaned.z) < CRASH_IMPACT_THRESHOLD);
+  assert.ok(Math.abs(projectOntoUpright(leaned, calibration.upright)) < CRASH_FLAT_Z_THRESHOLD);
+});
+
+test('stationary GPS spikes need two consecutive moving fixes', () => {
+  let state = advanceGpsSpeedFilter(undefined, 2.9);
+  assert.equal(state.speedKmh, 0);
+  state = advanceGpsSpeedFilter(state, 52.0);
+  assert.equal(state.speedKmh, 0);
+  state = advanceGpsSpeedFilter(state, 0);
+  assert.equal(state.moving, false);
+  state = advanceGpsSpeedFilter(state, 4.0);
+  assert.equal(state.speedKmh, 0);
+  state = advanceGpsSpeedFilter(state, 5.0);
+  assert.equal(state.moving, true);
+  assert.equal(state.speedKmh, 5.0);
 });
 
 // ---------------------------------------------------------------------------

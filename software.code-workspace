@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "BikeBoss",
+			"path": "."
+		},
+		{
+			"name": "BikeBoss Firmware",
+			"path": "firmware"
+		}
+	],
+	"settings": {}
+}

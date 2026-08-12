@@ -2,12 +2,18 @@
  * Telegram Bot webhook handler — commands + inline callbacks.
  */
 
-import { sendTelegramMessage, answerCallbackQuery } from '../lib/telegram.js';
+import { sendTelegramMessage, sendTelegramPhoto, answerCallbackQuery } from '../lib/telegram.js';
 import {
   upsertUser, getUserByTelegramId, getDeviceForUser, getDevice, latestTelemetry,
   logEvent, queueDeviceCommand,
 } from '../lib/db.js';
 import { createInvoice } from '../lib/payments.js';
+import {
+  isSharedPrototypeReadOnly,
+  resolveControlDeviceId,
+  resolveTelemetryDeviceId,
+} from '../lib/device-alias.js';
+import { connectivityFromTelemetry, measuredVehicleBattery } from '../lib/device-status.js';
 
 const ok = () => new Response('OK', { status: 200 });
 
@@ -61,6 +67,21 @@ const STR = {
     noGpsGeofence: '⚠️ No GPS fix available. Cannot set geofence.',
     noTrips: '📊 No trips recorded yet.',
     commandQueued: (action, id) => `✅ <b>${action}</b> command queued for <code>${id}</code>. It applies on the next device heartbeat.`,
+    sharedPrototypeReadOnly: '🔒 This registration uses the shared test prototype. ARM/DISARM is locked so one tester cannot control the bike for everyone.',
+    statusReport: (d) => [
+      `🏍️ <b>${d.vehicleName}</b>`,
+      `📟 <code>${d.deviceId}</code>`,
+      '',
+      `📶 Controller: ${d.connectionStatus === 'online' ? '🟢 Online' : d.connectionStatus === 'offline' ? '🔴 Offline' : '⚪ Never connected'}`,
+      `🕐 Last heartbeat: ${d.lastSeen || '—'}`,
+      `🔐 Security: ${d.armLabel}`,
+      `🛰️ GPS fix: ${d.gpsFix ? '✅' : '❌'}`,
+      `🔋 Vehicle battery: ${d.batteryVoltage == null ? 'Not measured (sensor not connected)' : `${d.batteryVoltage.toFixed(1)} V`}`,
+      `🏁 Speed: ${d.speed.toFixed(1)} km/h`,
+      '',
+      `📅 Subscription: ${d.subscriptionExpiry || 'N/A'}`,
+      d.lastEvent ? `\n⚠️ <b>${d.lastEvent.event_type}</b> (${d.lastEvent.created_at})` : '',
+    ].join('\n'),
     geofenceSet: (lat, lon, radius) => [
       '📍 <b>Geofence Set</b>',
       '',
@@ -116,6 +137,21 @@ const STR = {
     noGpsGeofence: '⚠️ គ្មានសញ្ញា GPS។ មិនអាចកំណត់តំបន់បានទេ។',
     noTrips: '📊 មិនទាន់មានដំណើរទេ។',
     commandQueued: (action, id) => `✅ ពាក្យបញ្ជា <b>${action}</b> បានដាក់ជូន <code>${id}</code>។ នឹងមានប្រសិទ្ធភាពនៅ heartbeat បន្ទាប់។`,
+    sharedPrototypeReadOnly: '🔒 ការចុះឈ្មោះនេះប្រើប្រូតូតៃបសាកល្បងរួម។ ARM/DISARM ត្រូវបានចាក់សោ ដើម្បីកុំឱ្យអ្នកសាកល្បងម្នាក់បញ្ជាម៉ូតូសម្រាប់អ្នកទាំងអស់។',
+    statusReport: (d) => [
+      `🏍️ <b>${d.vehicleName}</b>`,
+      `📟 <code>${d.deviceId}</code>`,
+      '',
+      `📶 ឧបករណ៍បញ្ជា: ${d.connectionStatus === 'online' ? '🟢 អនឡាញ' : d.connectionStatus === 'offline' ? '🔴 ក្រៅបណ្តាញ' : '⚪ មិនទាន់បានភ្ជាប់'}`,
+      `🕐 Heartbeat ចុងក្រោយ: ${d.lastSeen || '—'}`,
+      `🔐 សុវត្ថិភាព: ${d.armLabel}`,
+      `🛰️ សញ្ញា GPS: ${d.gpsFix ? '✅' : '❌'}`,
+      `🔋 ថ្មម៉ូតូ: ${d.batteryVoltage == null ? 'មិនបានវាស់ (មិនទាន់ភ្ជាប់សិនស័រ)' : `${d.batteryVoltage.toFixed(1)} V`}`,
+      `🏁 ល្បឿន: ${d.speed.toFixed(1)} km/h`,
+      '',
+      `📅 ការជាវ: ${d.subscriptionExpiry || 'N/A'}`,
+      d.lastEvent ? `\n⚠️ <b>${d.lastEvent.event_type}</b> (${d.lastEvent.created_at})` : '',
+    ].join('\n'),
     geofenceSet: (lat, lon, radius) => [
       '📍 <b>តំបន់ការពារបានកំណត់</b>',
       '',
@@ -268,34 +304,38 @@ async function cmdStatus(telegramId, lang, t, env) {
   const device = await getDeviceForUser(telegramId, env);
   if (!device) return t.noDevice;
 
-  const latest = await latestTelemetry(device.device_id, env);
+  const telemetryDeviceId = resolveTelemetryDeviceId(device);
+  const latest = await latestTelemetry(telemetryDeviceId, env);
   const lastEvent = await env.DB.prepare(
     `SELECT event_type, created_at FROM events WHERE device_id = ?
      ORDER BY created_at DESC LIMIT 1`
-  ).bind(device.device_id).first();
+  ).bind(telemetryDeviceId).first();
 
   const armLabels = ARM_LABELS[lang];
+  const connectivity = connectivityFromTelemetry(
+    latest,
+    Number(env.HEARTBEAT_TIMEOUT_MS ?? 600000),
+  );
 
-  return [
-    `🏍️ <b>${device.vehicle_model || 'BikeBoss'}</b>`,
-    `📟 <code>${device.device_id}</code>`,
-    '',
-    `🔐 ${armLabels[latest?.arm_state ?? 0]}`,
-    `📡 GPS: ${latest?.gps_fix ? '✅' : '❌'}`,
-    `📍 ${latest?.received_at || '—'}`,
-    `🔋 ${latest?.vbat != null ? latest.vbat.toFixed(1) + 'V' : 'N/A'}`,
-    `🏁 ${latest?.gps_speed != null ? latest.gps_speed.toFixed(1) + ' km/h' : '0 km/h'}`,
-    '',
-    `📅 ${device.subscription_expiry || 'N/A'}`,
-    lastEvent ? `\n⚠️ <b>${lastEvent.event_type}</b> (${lastEvent.created_at})` : '',
-  ].join('\n');
+  return t.statusReport({
+    vehicleName: device.vehicle_model || 'BikeBoss',
+    deviceId: device.device_id,
+    connectionStatus: connectivity.status,
+    lastSeen: latest?.received_at ?? null,
+    armLabel: armLabels[latest?.arm_state ?? 0],
+    gpsFix: Boolean(latest?.gps_fix),
+    batteryVoltage: measuredVehicleBattery(latest),
+    speed: Number(latest?.gps_speed ?? 0),
+    subscriptionExpiry: device.subscription_expiry,
+    lastEvent,
+  });
 }
 
 async function cmdLocate(telegramId, t, env) {
   const device = await getDeviceForUser(telegramId, env);
   if (!device) return t.noDevice;
 
-  const latest = await latestTelemetry(device.device_id, env);
+  const latest = await latestTelemetry(resolveTelemetryDeviceId(device), env);
   if (!latest?.gps_fix || latest.gps_lat == null) {
     return t.noGps;
   }
@@ -314,10 +354,15 @@ async function cmdLocate(telegramId, t, env) {
 async function cmdArmDisarm(telegramId, action, t, env) {
   const device = await getDeviceForUser(telegramId, env);
   if (!device) return t.noDevice;
+  if (isSharedPrototypeReadOnly(device, env)) return t.sharedPrototypeReadOnly;
+  const controlDeviceId = resolveControlDeviceId(device, env);
 
-  await queueDeviceCommand(device.device_id, action, env, { by: telegramId });
-  await logEvent(device.device_id, action, 'info', env, {
-    payload: { commanded_by: telegramId },
+  await queueDeviceCommand(controlDeviceId, action, env, {
+    by: telegramId,
+    requested_via_device_id: device.device_id,
+  });
+  await logEvent(controlDeviceId, action, 'info', env, {
+    payload: { commanded_by: telegramId, requested_via_device_id: device.device_id },
   });
 
   return t.commandQueued(action, device.device_id);
@@ -331,7 +376,7 @@ async function cmdGeofence(telegramId, t, env) {
     `SELECT gps_lat, gps_lon FROM telemetry
      WHERE device_id = ? AND gps_fix = 1
      ORDER BY received_at DESC LIMIT 1`
-  ).bind(device.device_id).first();
+  ).bind(resolveTelemetryDeviceId(device)).first();
 
   if (!latest) return t.noGpsGeofence;
 
@@ -355,7 +400,7 @@ async function cmdTrips(telegramId, t, env) {
 
   const trips = await env.DB.prepare(
     `SELECT * FROM trips WHERE device_id = ? ORDER BY start_time DESC LIMIT 5`
-  ).bind(device.device_id).all();
+  ).bind(resolveTelemetryDeviceId(device)).all();
 
   if (!trips.results?.length) return t.noTrips;
 
@@ -382,13 +427,13 @@ async function cmdSubscribe(chatId, telegramId, t, env) {
     '',
     `Device: <code>${device.device_id}</code>`,
     `Expires: ${device.subscription_expiry || 'N/A'}`,
-    'Renewal: $15.00 USD / year',
+    'Renewal: $0.10 USD (test)',
     '',
     t.subPrompt,
   ].join('\n'), env, {
     deviceId: device.device_id,
     replyMarkup: {
-      inline_keyboard: [[{ text: '💳 Extend ($15/Year)', callback_data: 'create_invoice' }]],
+      inline_keyboard: [[{ text: '💳 Extend ($0.10 test)', callback_data: 'create_invoice' }]],
     },
   });
   return ok();
@@ -439,31 +484,49 @@ async function handleCallback(cb, env) {
   if (cb.data === 'create_invoice') {
     const invoice = await createInvoice(telegramId, env);
     const lang = await getLangSafe(telegramId, env);
-    const text = invoice.error
-      ? `⚠️ ${invoice.error}`
-      : lang === 'km'
-        ? [
-            '💳 <b>វិក្កយបត្រទូទាត់</b>',
-            '',
-            `ចំនួន: <b>$${invoice.amount_usd.toFixed(2)}</b> USD`,
-            `លេខយោង: <code>${invoice.invoice_ref}</code>`,
-            '',
-            '👉 បើកកម្មវិធី BikeBoss (ប៊ូតុង 🏍️ ក្នុងម៉ឺនុយ) ដើម្បីមើល QR ហើយស្កេនជាមួយ ABA Mobile / Bakong។',
-            '',
-            `⏳ ផុតកំណត់ក្នុង 15 នាទី។ ការទូទាត់ត្រូវបានបញ្ជាក់ដោយស្វ័យប្រវត្តិ។`,
-          ].join('\n')
-        : [
-            '💳 <b>Payment Invoice</b>',
-            '',
-            `Amount: <b>$${invoice.amount_usd.toFixed(2)}</b> USD`,
-            `Ref: <code>${invoice.invoice_ref}</code>`,
-            '',
-            '👉 Open the BikeBoss app (🏍️ menu button) to see the QR and scan with ABA Mobile / Bakong.',
-            '',
-            '⏳ Expires in 15 minutes. Payment confirms automatically.',
-          ].join('\n');
+    if (invoice.error) {
+      await sendTelegramMessage(chatId, `⚠️ ${invoice.error}`, env);
+      return ok();
+    }
 
-    await sendTelegramMessage(chatId, text, env);
+    const text = lang === 'km'
+      ? [
+          '💳 <b>វិក្កយបត្រទូទាត់</b>',
+          '',
+          `ចំនួន: <b>$${invoice.amount_usd.toFixed(2)}</b> USD`,
+          `លេខយោង: <code>${invoice.invoice_ref}</code>`,
+          '',
+          'ស្កេន QR ខាងក្រោមជាមួយ ABA Mobile / Bakong។',
+          invoice.payway_link ? `ឬបើកតំណ: ${invoice.payway_link}` : '',
+          '',
+          '⏳ ផុតកំណត់ក្នុង 15 នាទី។ ការទូទាត់ត្រូវបានបញ្ជាក់ដោយស្វ័យប្រវត្តិ។',
+        ].filter(Boolean).join('\n')
+      : [
+          '💳 <b>Payment Invoice</b>',
+          '',
+          `Amount: <b>$${invoice.amount_usd.toFixed(2)}</b> USD`,
+          `Ref: <code>${invoice.invoice_ref}</code>`,
+          '',
+          'Scan the QR below with ABA Mobile / Bakong.',
+          invoice.payway_link ? `Or open link: ${invoice.payway_link}` : '',
+          '',
+          '⏳ Expires in 15 minutes. Payment confirms automatically.',
+        ].filter(Boolean).join('\n');
+
+    // Public QR image URL so Telegram can fetch & display it in chat
+    const qrUrl =
+      'https://api.qrserver.com/v1/create-qr-code/?size=320x320&ecc=M&margin=8&data=' +
+      encodeURIComponent(invoice.khqr_payload);
+
+    const photoResult = await sendTelegramPhoto(chatId, qrUrl, text, env);
+    if (!photoResult?.ok) {
+      // Fallback to text + link if Telegram cannot fetch the QR image URL
+      await sendTelegramMessage(
+        chatId,
+        text + (invoice.payway_link ? `\n\n🔗 ${invoice.payway_link}` : ''),
+        env
+      );
+    }
     return ok();
   }
 

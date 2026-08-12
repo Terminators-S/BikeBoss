@@ -7,6 +7,9 @@ export const CRASH_IMPACT_THRESHOLD = 19.6;   // m/s² (~2.0G)
 export const CRASH_ROTATION_THRESHOLD = 2.1;  // rad/s
 export const CRASH_FLAT_Z_THRESHOLD = 3.0;    // m/s²
 export const MOTION_THRESHOLD = 1.5;          // m/s² (van-lift motion)
+export const GPS_SPEED_START_KMH = 3.0;
+export const GPS_SPEED_STOP_KMH = 1.0;
+export const GPS_SPEED_CONFIRM_SAMPLES = 2;
 
 export function accelMagnitude(ax, ay, az) {
   return Math.sqrt(ax * ax + ay * ay + az * az);
@@ -14,6 +17,50 @@ export function accelMagnitude(ax, ay, az) {
 
 export function gyroMagnitude(gx, gy, gz) {
   return Math.sqrt(gx * gx + gy * gy + gz * gz);
+}
+
+export function calibrateGravityVector(ax, ay, az, gravity = 9.80665) {
+  const magnitude = accelMagnitude(ax, ay, az);
+  if (!Number.isFinite(magnitude) || magnitude <= 0) return null;
+  return {
+    scale: gravity / magnitude,
+    upright: { x: ax / magnitude, y: ay / magnitude, z: az / magnitude },
+  };
+}
+
+export function projectOntoUpright(accel, upright) {
+  return accel.x * upright.x + accel.y * upright.y + accel.z * upright.z;
+}
+
+export function advanceGpsSpeedFilter(
+  state = { moving: false, candidateSamples: 0 },
+  rawSpeedKmh = 0,
+) {
+  const raw = Number.isFinite(rawSpeedKmh) ? Math.max(0, rawSpeedKmh) : 0;
+  let moving = Boolean(state.moving);
+  let candidateSamples = Number(state.candidateSamples) || 0;
+  let speedKmh = 0;
+
+  if (!moving) {
+    if (raw >= GPS_SPEED_START_KMH) {
+      candidateSamples = Math.min(candidateSamples + 1, GPS_SPEED_CONFIRM_SAMPLES);
+      if (candidateSamples >= GPS_SPEED_CONFIRM_SAMPLES) {
+        moving = true;
+        candidateSamples = 0;
+        speedKmh = raw;
+      }
+    } else {
+      candidateSamples = 0;
+    }
+  } else if (raw <= GPS_SPEED_STOP_KMH) {
+    candidateSamples = Math.min(candidateSamples + 1, GPS_SPEED_CONFIRM_SAMPLES);
+    if (candidateSamples >= GPS_SPEED_CONFIRM_SAMPLES) moving = false;
+  } else {
+    candidateSamples = 0;
+    speedKmh = raw;
+  }
+
+  return { moving, candidateSamples, speedKmh, rawSpeedKmh: raw };
 }
 
 /**

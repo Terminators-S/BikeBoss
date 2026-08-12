@@ -42,8 +42,8 @@ The BikeBoss architecture spans three distinct execution layers: the Hardware Ed
              | UART Serial                     | HTTP Webhooks                | Native BLE
              v                                 v                              v
  +-----------------------+        +-------------------------+        +-------------------------+
- | SIMCom A7670E Modem   |        | ABA PayWay Gateway      |        | Foreground Service      |
- | (4G LTE / GNSS / Wi-Fi|        | (KHQR Payment Invoices) |        | (Background BLE Scanner)|
+ | A7670G + L76K GPS     |        | ABA PayWay Gateway      |        | Foreground Service      |
+ | (4G LTE + ext. GNSS)  |        | (KHQR Payment Invoices) |        | (Background BLE Scanner)|
  +-----------------------+        +-------------------------+        +-------------------------+
              |
              | High-Power Relay
@@ -64,7 +64,8 @@ The BikeBoss architecture spans three distinct execution layers: the Hardware Ed
 | Component | Selected Part | Functional Role | Specification & Protocol |
 | --- | --- | --- | --- |
 | **Microcontroller** | Seeed Studio XIAO ESP32-S3 | Edge Compute, BLE Advertiser, State Machine | Dual-core Xtensa LX7 @ 240MHz, 8MB PSRAM, 8MB Flash, Vector Instructions for TinyML |
-| **Cellular & Location** | SIMCom A7670E | 4G Telemetry, GNSS GPS, Wi-Fi BSSID Scanner | Hardware UART (115200 baud), LTE Cat-1, Multi-constellation GNSS |
+| **Cellular** | SIMCom A7670G on LilyGO T-A7670G | 4G telemetry and network fallback | Hardware UART (115200 baud), LTE Cat-1 |
+| **Location** | External L76K on LilyGO GPS daughterboard | Multi-constellation GNSS location | NMEA UART (9600 baud); A7670G itself has no internal GNSS |
 | **Motion Sensor** | MPU6050 | Crash Detection, Vibration, Orientation Sensing | 3-Axis Gyroscope + 3-Axis Accelerometer via Hardware I2C |
 | **Actuator Relay** | 5V Optocoupled Relay Module | Engine Immobilization & Smart Key Control | Single-pole high-current relay driven by ESP32-S3 GPIO |
 | **Power Regulation** | DC-DC Buck Converter | Vehicle Voltage Step-down | Converts 12V-14.4V motorcycle battery input down to a clean 5.0V DC rail |
@@ -80,14 +81,15 @@ The BikeBoss architecture spans three distinct execution layers: the Hardware Ed
          +-------------------------------+-------------------------------+
          |                               |                               |
          v                               v                               v
-   [ PIN D4 / D5 ]                 [ PIN D6 / D7 ]                 [ PIN D1 ]
+   [ PIN D4 / D5 ]              [ D6 / D7 + D2 ]                  [ PIN D1 ]
    Hardware I2C                    Hardware UART1                  GPIO Output
          |                               |                               |
          v                               v                               v
  +---------------+               +---------------+               +---------------+
- | MPU6050 IMU   |               | SIMCom A7670E |               | 5V Relay      |
- | SDA = D4      |               | TX = D6 (RX1) |               | Signal = D1   |
- | SCL = D5      |               | RX = D7 (TX1) |               | (High = Cut)  |
+ | MPU6050 IMU   |               | A7670G + L76K |               | 5V Relay      |
+ | SDA = D4      |               | Modem RX = D6 |               | Signal = D1   |
+ | SCL = D5      |               | Modem TX = D7 |               | (High = Cut)  |
+ |               |               | GPS RX = D2   |               |               |
  +---------------+               +---------------+               +---------------+
 
 ```
@@ -124,12 +126,20 @@ bikeboss-project/
 ### Firmware Execution Design (ESP32-S3)
 
 - **Non-Blocking Architecture:** Uses `millis()` state timers instead of `delay()` to maintain a strict 100Hz sampling rate on the MPU6050 sensor engine.
-- **AT-Command Modem Driver:** Custom serial wrapper handles SIMCom A7670E network attachment, HTTP POST telemetry dispatches, and raw GNSS parsing asynchronously.
+- **AT modem + external GPS drivers:** A7670G AT commands handle network/HTTP; a separate receive-only UART parses L76K NMEA asynchronously.
+- **Trusted uplink manager:** Up to eight encrypted Wi-Fi profiles are scanned
+  asynchronously. Priority, RSSI, cooldown, dwell and roaming hysteresis choose
+  a stable network; A7670G 4G is the fallback and SPIFFS is the final delivery
+  buffer. GPS collection stays independent on the L76K.
 
 ### Serverless Cloud Backend (Cloudflare)
 
 - **Workers Engine:** Edge microservices handle data ingestion, calculate geofences, and process Telegram webhooks with zero cold-start latency.
 - **D1 Relational Database:** Serverless SQLite database managing user profiles, vehicle states, incident records, and KHQR payment invoices.
+- **Credential envelopes:** Trusted Wi-Fi profiles are AES-256-GCM encrypted for
+  one device and revisioned in D1. Passwords are write-only; telemetry contains
+  only an opaque profile ID. Signed firmware is mandatory for configuration
+  downlink.
 
 ---
 
@@ -159,12 +169,22 @@ Where earth radius R = 6,371,000 meters. A breach alert fires if d > 100 meters 
 
 ```text
 [ STAGE 1: Impact Force ]    -->    [ STAGE 2: Rotation ]    -->    [ STAGE 3: Vehicle Orientation ]
-Atotal > 19.6 m/s² (~2.0G)          Gtotal > 2.1 rad/sec            Wait 3s -> Z-Axis Gravity < 3.0 m/s²
+Atotal > 19.6 m/s² (~2.0G)          Gtotal > 2.1 rad/sec            Down + still continuously after settling
 ```
 
 1. **Impact Check:** Atotal = √(Ax² + Ay² + Az²) > 19.6 m/s²
 2. **Rotation Check:** Gtotal = √(Gx² + Gy² + Gz²) > 2.1 rad/sec
-3. **Flatness Verification:** Waits 3s. If |Az| < 3.0 m/s², motorcycle is lying flat → confirmed CRASH event dispatched.
+3. **Orientation and Stillness Verification:** Boot calibration learns the
+   installed sensor's gravity direction without subtracting mounting-angle
+   gravity as bias. After at least 3 seconds, the motorcycle must remain both
+   down (`|gravity projection| < 3.0 m/s²`) and still for 2 continuous seconds.
+   Ambiguous candidates expire after 8 seconds. One CRASH event is dispatched;
+   the detector re-arms after the motorcycle remains upright and still for 5
+   seconds.
+
+L76K speed uses a 3.0 km/h movement deadband and requires two consecutive
+moving RMC fixes. This suppresses isolated stationary Doppler-speed spikes;
+stopping uses a 1.0 km/h hysteresis threshold.
 
 ---
 
