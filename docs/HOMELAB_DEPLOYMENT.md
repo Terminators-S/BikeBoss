@@ -77,13 +77,11 @@ placing the binary and transactionally registering its selected-device pending
 rollout. It never creates an OTA command. The owner must open **Account →
 Settings → Firmware Update** and press **Install update**.
 
-During the first endpoint-migration release, the staging Worker may set
-`DEVICE_MIGRATION_ORIGIN` to this home-lab origin. That Worker forwards only
-device-originated `/api/v2/device/*` and the four legacy device-ingest paths,
-preserving the signed path and body for verification by the home server. This
-lets a tracker on the previous Worker-host build receive the rider-approved OTA.
-After the migration build boots, its compiled `CLOUD_HOST` connects directly to
-the home server and the relay is no longer in its traffic path.
+The first endpoint-migration release used a temporary, device-only staging
+Worker relay so the previous Worker-host build could receive its rider-approved
+OTA. Remove that relay immediately after the migration build acknowledges
+installation. Its compiled `CLOUD_HOST` then connects directly to the home
+server; the production runtime must not depend on Worker compute.
 
 ## Data migration
 

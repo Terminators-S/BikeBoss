@@ -88,7 +88,6 @@ CORS_ALLOWED_ORIGINS = "https://staging.bikeboss-app.pages.dev,https://bikeboss.
 TELEGRAM_AUTH_MAX_AGE_SECONDS = 300
 APP_SESSION_TTL_SECONDS = 900
 DEVICE_REQUEST_MAX_SKEW_SECONDS = 300
-DEVICE_MIGRATION_ORIGIN = "https://bikeboss.creative-studio.blog"
 
 [env.staging.triggers]
 crons = []
